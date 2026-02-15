@@ -101,18 +101,15 @@ export async function POST(req: NextRequest) {
               console.error("Failed to send reply:", replyError);
             }
           } else {
-            // Not a product keyword, maybe chat?
-            // Optional: Echo or Ignore
-            // For debugging, reply so user knows bot is alive
-            if (text === "ping") {
-              try {
-                await client.replyMessage({
-                  replyToken: event.replyToken,
-                  messages: [{ type: "text", text: "pong" }]
-                });
-              } catch (replyError) {
-                console.error("Failed to send reply:", replyError);
-              }
+            console.log(`Keyword '${potentialKeyword}' not found.`);
+            // Debugging: Always reply to confirm receipt
+            try {
+              await client.replyMessage({
+                replyToken: event.replyToken,
+                messages: [{ type: "text", text: `❓ Product/Command '${potentialKeyword}' not found.\nTry adding a product with this keyword in the Admin Dashboard.` }]
+              });
+            } catch (replyError) {
+              console.error("Failed to send fallback reply:", replyError);
             }
           }
         }
