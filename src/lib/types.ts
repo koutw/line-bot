@@ -1,0 +1,14 @@
+export enum OrderStatus {
+  PENDING = "PENDING",
+  CONFIRMED = "CONFIRMED",
+  PURCHASED = "PURCHASED",
+  ARRIVED_TW = "ARRIVED_TW",
+  SHIPPED = "SHIPPED",
+  COMPLETED = "COMPLETED",
+  CANCELLED = "CANCELLED"
+}
+
+export enum Role {
+  ADMIN = "ADMIN",
+  CUSTOMER = "CUSTOMER"
+}
