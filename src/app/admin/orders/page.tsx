@@ -63,10 +63,10 @@ interface Product {
 }
 
 const STATUS_OPTIONS = [
-  { value: "CONFIRMED", label: "已確認", color: "bg-green-200 text-green-800", icon: CheckCircle },
-  { value: "SHIPPING", label: "出貨中", color: "bg-yellow-200 text-yellow-800", icon: Truck },
-  { value: "ARRIVED", label: "已到貨", color: "bg-green-600 text-white", icon: PackageCheck },
-  { value: "DELETED", label: "已刪除", color: "bg-red-200 text-red-800", icon: Trash2 },
+  { value: "CONFIRMED", label: "已確認", color: "bg-green-100 text-green-800", icon: CheckCircle },
+  { value: "PURCHASED", label: "已採買", color: "bg-blue-100 text-blue-800", icon: PackageCheck },
+  { value: "OUT_OF_STOCK", label: "斷貨", color: "bg-red-100 text-red-800", icon: AlertCircle },
+  { value: "CANCELLED", label: "客人取消", color: "bg-gray-200 text-gray-800", icon: Trash2 },
 ];
 
 export default function OrdersPage() {
@@ -138,7 +138,7 @@ export default function OrdersPage() {
   const handleBatchStatus = async (status: string) => {
     if (selectedOrders.length === 0) return;
 
-    if (status === "DELETED") {
+    if (status === "CANCELLED") {
       setIsDeleteOpen(true);
       return;
     }
@@ -147,7 +147,7 @@ export default function OrdersPage() {
   };
 
   const handleDeleteConfirm = async () => {
-    await updateStatus(selectedOrders, "DELETED", deleteReason);
+    await updateStatus(selectedOrders, "CANCELLED", deleteReason);
     setIsDeleteOpen(false);
     setDeleteReason("");
   };
@@ -173,9 +173,12 @@ export default function OrdersPage() {
   };
 
   const handleSingleStatusUpdate = async (id: string, status: string) => {
-    // Direct update for single item inline
+    if (status === "CANCELLED") {
+      setSelectedOrders([id]);
+      setIsDeleteOpen(true);
+      return;
+    }
     await updateStatus([id], status);
-    // Ensure popover closes (it should automatically on click usually, or we verify)
   };
 
   const handleSort = (key: string) => {
@@ -348,7 +351,7 @@ export default function OrdersPage() {
               </TableRow>
             ) : (
               orders.map((order) => (
-                <TableRow key={order.id} className={order.status === "DELETED" ? "opacity-50" : ""}>
+                <TableRow key={order.id} className={order.status === "CANCELLED" ? "opacity-50" : ""}>
                   <TableCell>
                     <Checkbox
                       checked={selectedOrders.includes(order.id)}
@@ -419,13 +422,13 @@ export default function OrdersPage() {
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>刪除確認</DialogTitle>
+            <DialogTitle>取消訂單確認</DialogTitle>
             <DialogDescription>
-              您確定要刪除選取的 {selectedOrders.length} 筆訂單嗎？此操作將標記訂單為「已刪除」。
+              您確定要取消選取的 {selectedOrders.length} 筆訂單嗎？
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Label>刪除原因 (選填)</Label>
+            <Label>取消原因 (選填)</Label>
             <Input
               value={deleteReason}
               onChange={(e) => setDeleteReason(e.target.value)}
@@ -434,8 +437,8 @@ export default function OrdersPage() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>取消</Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm}>確認刪除</Button>
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>返回</Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm}>確認取消</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
