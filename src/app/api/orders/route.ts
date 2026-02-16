@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
         select: { name: true, lineId: true },
       },
       product: {
-        select: { name: true, price: true, keyword: true },
+        select: { name: true, keyword: true },
       },
     },
     orderBy: { [sort]: order },

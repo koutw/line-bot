@@ -40,85 +40,114 @@ export async function POST(req: NextRequest) {
 
           // --- ADMIN PRODUCT UPLOAD ---
           if (text.includes("連線商品")) {
-            // Check if user is ADMIN (you might want to verify robust admin check later, for now we trust the specific format or check role)
-            // For MVP, we'll check role if possible, but let's assume the specific format is enough or check DB
             let user = await prisma.user.findUnique({ where: { lineId: userId } });
 
-            // Allow if user is admin OR if we want to allow testing. 
-            // Better to check role. If user doesn't exist, they can't be admin.
             if (!user || user.role !== "ADMIN") {
-              // Optional: Reply "Unauthorized" or ignore
-              // For now, let's proceed to allow easier testing or add a simple check if you promoted yourself
-            }
+              // Ignore non-admin
+            } else {
+              // Parse usage:
+              // 連線商品
+              // 代號：N01
+              // 商品名：adidas唐衣-紅
+              // size：S:100, M:120, L:120
+              // 商品描述：無
 
-            // Parse usage:
-            // ✨ 大家好新品上架 ✨
-            // 連線商品
-            // 代號：N01
-            // 商品名：adidas唐衣-紅
-            // size：S、Ｍ、L
-            // 商品描述：無
+              const lines = text.split("\n");
+              let keyword = "";
+              let name = "";
+              let variantsData: { size: string, price: number }[] = []; // { size, price }
+              let description = "";
 
-            const lines = text.split("\n");
-            let keyword = "";
-            let name = "";
-            let sizes: string[] = [];
-            let description = "";
-            let price = 0;
+              // Parse line by line
+              for (const line of lines) {
+                if (line.includes("代號：") || line.includes("代號:")) {
+                  keyword = line.split(/：|:/)[1].trim();
+                } else if (line.includes("商品名：") || line.includes("商品名:")) {
+                  name = line.split(/：|:/)[1].trim();
+                } else if (line.includes("size：") || line.includes("size:")) {
+                  const sizeContent = line.split(/：|:/)[1].trim(); // e.g. "S:100, M:120"
+                  const items = sizeContent.split(/[ ,、]+/); // ["S:100", "M:120"]
 
-            // Parse line by line
-            for (const line of lines) {
-              if (line.includes("代號：") || line.includes("代號:")) {
-                keyword = line.split(/：|:/)[1].trim();
-              } else if (line.includes("商品名：") || line.includes("商品名:")) {
-                name = line.split(/：|:/)[1].trim();
-              } else if (line.includes("size：") || line.includes("size:")) {
-                const sizeStr = line.split(/：|:/)[1].trim();
-                // Split by common separators: space, comma, 、
-                sizes = sizeStr.split(/[ ,、]+/).filter(s => s.trim() !== "");
-              } else if (line.includes("商品描述：") || line.includes("商品描述:")) {
-                description = line.split(/：|:/)[1].trim();
-              } else if (line.includes("價格：") || line.includes("價格:")) {
-                // Optional support for price if they add it
-                const p = line.split(/：|:/)[1].trim();
-                price = parseInt(p, 10) || 0;
-              }
-            }
-
-            if (keyword && name) {
-              // Create Product
-              try {
-                // Upsert to update if exists
-                const product = await prisma.product.upsert({
-                  where: { keyword },
-                  update: {
-                    name,
-                    description: description === "無" ? null : description,
-                    sizes: sizes, // Store as native array
-                    price: price // Default 0 if not provided
-                  },
-                  create: {
-                    keyword,
-                    name,
-                    description: description === "無" ? null : description,
-                    sizes: sizes, // Store as native array
-                    price: price
+                  for (const item of items) {
+                    if (item.includes(":") || item.includes("：")) {
+                      const [s, p] = item.split(/[:：]/);
+                      if (s && p) {
+                        variantsData.push({ size: s.trim(), price: parseInt(p.trim(), 10) || 0 });
+                      }
+                    } else {
+                      // Fallback if no price specified? Maybe assume 0 or handle error?
+                      // For flexibility, if only size is given, maybe price is 0?
+                      if (item.trim()) {
+                        variantsData.push({ size: item.trim(), price: 0 });
+                      }
+                    }
                   }
-                });
 
-                // Reply with User Template
-                const replyText = `✅ 商品上架成功！\n${name} (${keyword})\n尺寸: ${sizes.join(", ")}\n\n👇 發送以下文字下單:\n---------------\n代號：${keyword}\n數量：1\n尺寸：${sizes[0] || "F"}`;
+                } else if (line.includes("商品描述：") || line.includes("商品描述:")) {
+                  description = line.split(/：|:/)[1].trim();
+                }
+              }
 
-                await client.replyMessage({
-                  replyToken: event.replyToken,
-                  messages: [{ type: "text", text: replyText }]
-                });
-              } catch (e) {
-                console.error("Product creation failed", e);
-                await client.replyMessage({
-                  replyToken: event.replyToken,
-                  messages: [{ type: "text", text: "❌ 商品上架失敗，請檢查格式或關鍵字是否重複。" }]
-                });
+              if (keyword && name) {
+                try {
+                  // Update or Create Product
+                  // Since variants logic is complex (add/remove), for simplicity in this "upsert" simulation:
+                  // We will find existing, delete variants, and recreate them.
+
+                  const existing = await prisma.product.findUnique({ where: { keyword } });
+
+                  if (existing) {
+                    // Update basic info
+                    await prisma.product.update({
+                      where: { id: existing.id },
+                      data: {
+                        name,
+                        description: description === "無" ? null : description,
+                      }
+                    });
+                    // Recreate variants
+                    await prisma.productVariant.deleteMany({ where: { productId: existing.id } });
+                    if (variantsData.length > 0) {
+                      await prisma.productVariant.createMany({
+                        data: variantsData.map(v => ({
+                          productId: existing.id,
+                          size: v.size,
+                          price: v.price
+                        }))
+                      });
+                    }
+                  } else {
+                    // Create new
+                    await prisma.product.create({
+                      data: {
+                        keyword,
+                        name,
+                        description: description === "無" ? null : description,
+                        variants: {
+                          create: variantsData.map(v => ({
+                            size: v.size,
+                            price: v.price
+                          }))
+                        }
+                      }
+                    });
+                  }
+
+                  // Reply
+                  const variantDisplay = variantsData.map(v => `${v.size}($${v.price})`).join(", ");
+                  const replyText = `✅ 商品上架成功！\n${name} (${keyword})\n規格: ${variantDisplay}\n\n👇 發送以下文字下單:\n---------------\n代號：${keyword}\n數量：1\n尺寸：${variantsData[0]?.size || "F"}`;
+
+                  await client.replyMessage({
+                    replyToken: event.replyToken,
+                    messages: [{ type: "text", text: replyText }]
+                  });
+                } catch (e) {
+                  console.error("Product creation failed", e);
+                  await client.replyMessage({
+                    replyToken: event.replyToken,
+                    messages: [{ type: "text", text: "❌ 商品上架失敗。" }]
+                  });
+                }
               }
             }
             return; // Stop processing
@@ -131,8 +160,25 @@ export async function POST(req: NextRequest) {
           // 數量：2
           // 尺寸：L
 
-          // Simple heuristic: check if contains "代號" key
-          if (text.includes("代號：") || text.includes("代號:")) {
+          // STRICT CHECK: Must contain ALL 3 keywords
+          const hasKeyword = text.includes("代號：") || text.includes("代號:");
+          const hasQuantity = text.includes("數量：") || text.includes("數量:");
+          const hasSize = text.includes("尺寸：") || text.includes("尺寸:");
+
+          if (hasKeyword && hasQuantity && hasSize) {
+
+            // 0. Check Global Switch
+            const setting = await prisma.systemSetting.findUnique({ where: { key: "ordering_enabled" } });
+            // If setting value is "false", deny. Default to true if not set? Or default false?
+            // User requested "turn off", so imply it's usually on. Let's assume enabled unless explicitly "false".
+            if (setting?.value === "false") {
+              await client.replyMessage({
+                replyToken: event.replyToken,
+                messages: [{ type: "text", text: "🔒 目前非連線時間，暫不開放下單，謝謝！" }]
+              });
+              return;
+            }
+
             const lines = text.split("\n");
             let keyword = "";
             let quantity = 1;
@@ -150,15 +196,30 @@ export async function POST(req: NextRequest) {
             }
 
             if (keyword) {
-              // Find Product
+              // Find Product with Variants
               const product = await prisma.product.findUnique({
-                where: { keyword }
+                where: { keyword },
+                include: { variants: true }
               });
 
               if (!product) {
                 await client.replyMessage({
                   replyToken: event.replyToken,
                   messages: [{ type: "text", text: `❓ 找不到代號為 ${keyword} 的商品。` }]
+                });
+                return;
+              }
+
+              // Find matching variant
+              // Case-insensitive comparison can be tricky, let's try exact first then case-insensitive
+              const variant = product.variants.find(v => v.size === size) ||
+                product.variants.find(v => v.size.toLowerCase() === size.toLowerCase());
+
+              if (!variant) {
+                const availableSizes = product.variants.map(v => v.size).join(", ");
+                await client.replyMessage({
+                  replyToken: event.replyToken,
+                  messages: [{ type: "text", text: `⚠️ 找不到尺寸 "${size}"。\n可用尺寸: ${availableSizes}` }]
                 });
                 return;
               }
@@ -182,8 +243,8 @@ export async function POST(req: NextRequest) {
                   userId: user.id,
                   productId: product.id,
                   quantity: quantity,
-                  size: size,
-                  totalAmount: product.price * quantity,
+                  size: variant.size, // Store exact variant size string
+                  totalAmount: variant.price * quantity,
                   status: "CONFIRMED"
                 }
               });
@@ -191,13 +252,13 @@ export async function POST(req: NextRequest) {
               // Reply
               await client.replyMessage({
                 replyToken: event.replyToken,
-                messages: [{ type: "text", text: `✅ 訂單已確認！\n\n商品: ${product.name}\n尺寸: ${size}\n數量: ${quantity}\n總金額: $${product.price * quantity}\n謝謝您的購買！` }]
+                messages: [{ type: "text", text: `✅ 訂單已確認！\n\n商品: ${product.name}\n尺寸: ${variant.size}\n數量: ${quantity}\n總金額: $${variant.price * quantity}\n謝謝您的購買！` }]
               });
             }
             return;
           }
 
-          // Fallback or other logic (ignored for now to avoid spamming)
+          // If strict check fails, do NOTHING (ignore spam)
         }
       })
     );

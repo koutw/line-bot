@@ -48,7 +48,7 @@ import { cn } from "@/lib/utils";
 interface Order {
   id: string;
   user: { name: string | null; lineId: string };
-  product: { name: string; price: number; keyword: string };
+  product: { name: string; keyword: string };
   quantity: number;
   totalAmount: number;
   status: string;

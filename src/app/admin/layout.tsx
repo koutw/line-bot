@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Package, ShoppingCart, Users, PanelLeft } from "lucide-react";
+import { Package, ShoppingCart, Users, PanelLeft, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -41,6 +41,13 @@ export default function AdminLayout({
           >
             <Users className="h-4 w-4" />
             會員管理
+          </Link>
+          <Link
+            href="/admin/settings"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
+          >
+            <Settings className="h-4 w-4" />
+            系統設定
           </Link>
         </nav>
       </aside>
