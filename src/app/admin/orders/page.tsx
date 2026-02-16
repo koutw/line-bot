@@ -54,10 +54,10 @@ export default function OrdersPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold tracking-tight">Orders</h2>
+        <h2 className="text-2xl font-bold tracking-tight">訂單記錄</h2>
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">Start Date</Label>
+            <Label className="text-xs">開始日期</Label>
             <Input
               type="date"
               className="w-[150px]"
@@ -68,7 +68,7 @@ export default function OrdersPage() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">End Date</Label>
+            <Label className="text-xs">結束日期</Label>
             <Input
               type="date"
               className="w-[150px]"
@@ -78,9 +78,9 @@ export default function OrdersPage() {
               }
             />
           </div>
-          <Button variant="outline" onClick={handleExport}>
+          <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />
-            Export CSV
+            匯出 CSV
           </Button>
         </div>
       </div>
@@ -89,19 +89,19 @@ export default function OrdersPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Product</TableHead>
-              <TableHead>Qty</TableHead>
-              <TableHead>Total</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>日期</TableHead>
+              <TableHead>客戶</TableHead>
+              <TableHead>商品</TableHead>
+              <TableHead>數量</TableHead>
+              <TableHead>總金額</TableHead>
+              <TableHead>狀態</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {orders.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                  No orders found.
+                  目前沒有訂單記錄。
                 </TableCell>
               </TableRow>
             ) : (
@@ -111,7 +111,7 @@ export default function OrdersPage() {
                     {new Date(order.createdAt).toLocaleDateString()}
                   </TableCell>
                   <TableCell>
-                    <div className="font-medium">{order.user.name || "Unknown"}</div>
+                    <div className="font-medium">{order.user.name || "未知"}</div>
                     <div className="text-xs text-muted-foreground font-mono truncate max-w-[100px]">
                       {order.user.lineId}
                     </div>

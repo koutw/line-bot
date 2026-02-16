@@ -61,32 +61,32 @@ export default function ProductsPage() {
 
       if (!res.ok) throw new Error("Failed");
 
-      toast.success("Product created!");
+      toast.success("商品已新增！");
       setIsOpen(false);
       fetchProducts();
       setFormData({ name: "", price: "", keyword: "", stock: "0" });
     } catch (error) {
-      toast.error("Error creating product");
+      toast.error("新增商品失敗");
     }
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-tight">Products</h2>
+        <h2 className="text-2xl font-bold tracking-tight">商品列表</h2>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" /> Add Product
+            <Button size="sm">
+              <Plus className="mr-2 h-4 w-4" /> 新增商品
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create New Product</DialogTitle>
+              <DialogTitle>新增商品</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">商品名稱</Label>
                 <Input
                   id="name"
                   value={formData.name}
@@ -97,7 +97,7 @@ export default function ProductsPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="keyword">Keyword (Orders triggered by this)</Label>
+                <Label htmlFor="keyword">關鍵字 (訂單觸發詞)</Label>
                 <Input
                   id="keyword"
                   value={formData.keyword}
@@ -110,7 +110,7 @@ export default function ProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="price">Price (TWD)</Label>
+                  <Label htmlFor="price">價格 (TWD)</Label>
                   <Input
                     id="price"
                     type="number"
@@ -122,7 +122,7 @@ export default function ProductsPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="stock">Stock</Label>
+                  <Label htmlFor="stock">庫存</Label>
                   <Input
                     id="stock"
                     type="number"
@@ -134,7 +134,7 @@ export default function ProductsPage() {
                 </div>
               </div>
               <Button type="submit" className="w-full">
-                Create
+                新增
               </Button>
             </form>
           </DialogContent>
@@ -145,10 +145,10 @@ export default function ProductsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Keyword</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Stock</TableHead>
+              <TableHead>關鍵字</TableHead>
+              <TableHead>名稱</TableHead>
+              <TableHead>價格</TableHead>
+              <TableHead>庫存</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
