@@ -83,9 +83,7 @@ export default function ProductsPage() {
   };
 
   const removeVariant = (index: number) => {
-    if (variants.length > 1) {
-      setVariants(variants.filter((_, i) => i !== index));
-    }
+    setVariants(variants.filter((_, i) => i !== index));
   };
 
   const updateVariant = (index: number, field: "size" | "price", value: string) => {
@@ -359,7 +357,7 @@ export default function ProductsPage() {
                           className="w-24"
                           required
                         />
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removeVariant(index)} disabled={variants.length === 1}>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => removeVariant(index)}>
                           <Minus className="h-4 w-4" />
                         </Button>
                       </div>
