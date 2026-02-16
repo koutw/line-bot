@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Verifying Prisma Client changes...');
 
-  // 1. Verify Product creation with sizes
+  // 1. Verify Product creation with variants
   const keyword = 'TEST001';
   console.log(`Creating/Updating product with keyword: ${keyword}`);
 
@@ -14,22 +14,34 @@ async function main() {
     where: { keyword },
     update: {
       name: 'Test Product',
-      sizes: ['S', 'M', 'L'],
-      price: 100
+      variants: {
+        deleteMany: {},
+        create: [
+          { size: 'S', price: 100, stock: 10 },
+          { size: 'M', price: 120, stock: 10 },
+          { size: 'L', price: 150, stock: 10 },
+        ]
+      }
     },
     create: {
       keyword,
       name: 'Test Product',
-      sizes: ['S', 'M', 'L'],
-      price: 100
-    }
+      variants: {
+        create: [
+          { size: 'S', price: 100, stock: 10 },
+          { size: 'M', price: 120, stock: 10 },
+          { size: 'L', price: 150, stock: 10 },
+        ]
+      }
+    },
+    include: { variants: true }
   });
   console.log('Product created:', product);
 
-  if (!Array.isArray(product.sizes) || product.sizes[0] !== 'S') {
-    console.error('ERROR: sizes field not saved correctly.');
+  if (product.variants.length !== 3) {
+    console.error('ERROR: variants not saved correctly.');
   } else {
-    console.log('SUCCESS: sizes field saved correctly.');
+    console.log('SUCCESS: variants saved correctly.');
   }
 
   // 2. Verify Order creation with size
@@ -41,21 +53,23 @@ async function main() {
     user = await prisma.user.create({ data: { lineId } });
   }
 
+  const variant = product.variants.find(v => v.size === 'M');
+
   const order = await prisma.order.create({
     data: {
       userId: user.id,
       productId: product.id,
       quantity: 1,
       size: 'M',
-      totalAmount: 100
+      totalAmount: variant?.price || 0
     }
   });
   console.log('Order created:', order);
 
   if (order.size !== 'M') {
-    console.error('ERROR: size field not saved correctly.');
+    console.error('ERROR: order size field not saved correctly.');
   } else {
-    console.log('SUCCESS: size field saved correctly.');
+    console.log('SUCCESS: order size field saved correctly.');
   }
 }
 
