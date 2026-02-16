@@ -43,6 +43,7 @@ model Order {
   quantity  Int         @default(1)
   size      String?     // e.g. "M"
   status    String      @default("PENDING") // PENDING, CONFIRMED, PURCHASED, ...
+  deleteReason String? // Reason if deleted
   totalAmount Int
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
