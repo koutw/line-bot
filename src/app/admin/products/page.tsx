@@ -20,7 +20,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Minus } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Minus, Pencil, Trash2 } from "lucide-react";
 
 interface ProductVariant {
   size: string;
@@ -36,6 +37,8 @@ interface Product {
 }
 
 export default function ProductsPage() {
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -63,10 +66,6 @@ export default function ProductsPage() {
   const handleBasePriceChange = (val: string) => {
     setFormData({ ...formData, basePrice: val });
     const price = parseInt(val) || 0;
-    // Update all existing variants to this price if they haven't been manually edited? 
-    // Or just simple explicit action. Let's just update all for simplicity or when adding new.
-    // User requested "Default price same, but editable".
-    // Let's update all variants to this new base price for convenience
     setVariants(prev => prev.map(v => ({ ...v, price })));
   };
 
@@ -90,6 +89,62 @@ export default function ProductsPage() {
     setVariants(newVariants);
   };
 
+  const handleEditClick = (product: Product) => {
+    setEditingId(product.id);
+    setFormData({
+      name: product.name,
+      keyword: product.keyword,
+      description: "",
+      basePrice: "",
+    });
+    const mappedVariants = product.variants.map(v => ({ size: v.size, price: v.price }));
+    setVariants(mappedVariants.length > 0 ? mappedVariants : [{ size: "F", price: 0 }]);
+    setIsOpen(true);
+  };
+
+  const handleAddClick = () => {
+    setEditingId(null);
+    setFormData({ name: "", keyword: "", basePrice: "", description: "" });
+    setVariants([{ size: "F", price: 0 }]);
+    setIsOpen(true);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedProducts.length === products.length) {
+      setSelectedProducts([]);
+    } else {
+      setSelectedProducts(products.map(p => p.id));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    if (selectedProducts.includes(id)) {
+      setSelectedProducts(selectedProducts.filter(pid => pid !== id));
+    } else {
+      setSelectedProducts([...selectedProducts, id]);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (!confirm(`確定要刪除選取的 ${selectedProducts.length} 個商品嗎？`)) return;
+
+    try {
+      const res = await fetch("/api/products", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedProducts }),
+      });
+
+      if (!res.ok) throw new Error("Delete failed");
+
+      toast.success("刪除成功");
+      setSelectedProducts([]);
+      fetchProducts();
+    } catch (e) {
+      toast.error("刪除失敗");
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -97,42 +152,60 @@ export default function ProductsPage() {
         name: formData.name,
         keyword: formData.keyword,
         description: formData.description,
-        variants: variants.filter(v => v.size.trim() !== ""), // Filter empty sizes
-        imageUrl: "", // Not yet implemented
+        variants: variants.filter(v => v.size.trim() !== ""),
+        imageUrl: "",
       };
 
-      const res = await fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      let res;
+      if (editingId) {
+        // UPDATE
+        res = await fetch("/api/products", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, id: editingId }),
+        });
+      } else {
+        // CREATE
+        res = await fetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
 
       if (!res.ok) throw new Error("Failed");
 
-      toast.success("商品已新增！");
+      toast.success(editingId ? "商品已更新！" : "商品已新增！");
       setIsOpen(false);
       fetchProducts();
-      // Reset form
+      setEditingId(null);
       setFormData({ name: "", keyword: "", basePrice: "", description: "" });
       setVariants([{ size: "F", price: 0 }]);
     } catch (error) {
-      toast.error("新增商品失敗");
+      toast.error(editingId ? "更新失敗" : "新增失敗");
     }
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-tight">商品列表</h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-2xl font-bold tracking-tight">商品列表</h2>
+          {selectedProducts.length > 0 && (
+            <Button variant="destructive" size="sm" onClick={handleBatchDelete}>
+              <Trash2 className="mr-2 h-4 w-4" /> 刪除 ({selectedProducts.length})
+            </Button>
+          )}
+        </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
-            <Button size="sm">
+            <Button size="sm" onClick={handleAddClick}>
               <Plus className="mr-2 h-4 w-4" /> 新增商品
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>新增商品</DialogTitle>
+              <DialogTitle>{editingId ? "編輯商品" : "新增商品"}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -202,7 +275,7 @@ export default function ProductsPage() {
               </div>
 
               <Button type="submit" className="w-full">
-                新增商品
+                {editingId ? "更新商品" : "新增商品"}
               </Button>
             </form>
           </DialogContent>
@@ -213,29 +286,55 @@ export default function ProductsPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[40px]">
+                <Checkbox
+                  checked={products.length > 0 && selectedProducts.length === products.length}
+                  onCheckedChange={toggleSelectAll}
+                />
+              </TableHead>
               <TableHead>代號</TableHead>
               <TableHead>名稱</TableHead>
               <TableHead>價格區間</TableHead>
               <TableHead>尺寸</TableHead>
+              <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {products.map((product) => {
-              const prices = product.variants?.map(v => v.price) || [];
-              const minPrice = prices.length ? Math.min(...prices) : 0;
-              const maxPrice = prices.length ? Math.max(...prices) : 0;
-              const priceDisplay = minPrice === maxPrice ? `$${minPrice}` : `$${minPrice} ~ $${maxPrice}`;
-              const sizesDisplay = product.variants?.map(v => v.size).join(", ");
+            {products.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  目前沒有商品。
+                </TableCell>
+              </TableRow>
+            ) : (
+              products.map((product) => {
+                const prices = product.variants?.map(v => v.price) || [];
+                const minPrice = prices.length ? Math.min(...prices) : 0;
+                const maxPrice = prices.length ? Math.max(...prices) : 0;
+                const priceDisplay = minPrice === maxPrice ? `$${minPrice}` : `$${minPrice} ~ $${maxPrice}`;
+                const sizesDisplay = product.variants?.map(v => v.size).join(", ");
 
-              return (
-                <TableRow key={product.id}>
-                  <TableCell className="font-mono">{product.keyword}</TableCell>
-                  <TableCell>{product.name}</TableCell>
-                  <TableCell>{priceDisplay}</TableCell>
-                  <TableCell>{sizesDisplay}</TableCell>
-                </TableRow>
-              );
-            })}
+                return (
+                  <TableRow key={product.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedProducts.includes(product.id)}
+                        onCheckedChange={() => toggleSelect(product.id)}
+                      />
+                    </TableCell>
+                    <TableCell className="font-mono">{product.keyword}</TableCell>
+                    <TableCell>{product.name}</TableCell>
+                    <TableCell>{priceDisplay}</TableCell>
+                    <TableCell>{sizesDisplay}</TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon" onClick={() => handleEditClick(product)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
         </Table>
       </div>
