@@ -53,7 +53,7 @@ model Order {
   userId    String
   user      User        @relation(fields: [userId], references: [id])
   productId String
-  product   Product     @relation(fields: [productId], references: [id])
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   quantity  Int         @default(1)
   size      String?     // e.g. "M"
   status    String      @default("PENDING") // PENDING, CONFIRMED, PURCHASED, ...
