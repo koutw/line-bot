@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
       order.product.keyword,
       `"${order.product.name}"`,
       order.quantity,
-      order.product.price,
+      order.quantity > 0 ? Math.round(order.totalAmount / order.quantity) : 0,
       order.totalAmount,
       order.status
     ].join(",");
