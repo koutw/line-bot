@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+# Line Proxy Shop
 
-First, run the development server:
+A LINE Bot e-commerce application built with Next.js, Prisma, and PostgreSQL.
 
+## Features
+- **LINE Messaging API Integration**: Handles webhooks and replies.
+- **Admin Dashboard**: Manage products and orders.
+- **PostgreSQL**: Robust database for production.
+- **Render.com Ready**: Configured for easy deployment.
+
+## Tech Stack
+- **Framework**: Next.js 16 (App Router)
+- **Database**: PostgreSQL (Prisma ORM)
+- **UI**: Tailwind CSS, Shadcn UI
+- **Deployment**: Render.com
+
+## Getting Started Locally
+
+### 1. Clone the repository
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/koutw/line-bot.git
+cd line-bot
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Install dependencies
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Setup Environment Variables
+Create a `.env` file in the root directory:
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/line_proxy_shop"
+CHANNEL_ACCESS_TOKEN="your_channel_access_token"
+CHANNEL_SECRET="your_channel_secret"
+NEXTAUTH_SECRET="your_nextauth_secret"
+NEXTAUTH_URL="http://localhost:3000"
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Database Setup
+Ensure you have a local PostgreSQL running (or use Docker).
+```bash
+# Push schema to DB
+npx prisma db push
+```
 
-## Learn More
+### 5. Run the server
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Deployment on Render.com
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+This project is configured for **Render Blueprints**.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1.  Push your code to GitHub.
+2.  Log in to [Render.com](https://render.com).
+3.  Click **New +** -> **Blueprint**.
+4.  Connect this repository.
+5.  Render will automatically create the **Web Service** and **PostgreSQL Database**.
+6.  **IMPORTANT**: Go to the **Environment** settings of the Web Service and manually add:
+    -   `CHANNEL_ACCESS_TOKEN`
+    -   `CHANNEL_SECRET`
 
-## Deploy on Vercel
+## Database Management
+- **Schema Update**: The deployment command `npx prisma db push` automatically updates the schema on every deploy.
+- **Studio**: Run `npx prisma studio` locally to manage data.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts
+- `npm run dev`: Start working dev server
+- `npm run build`: Build for production
+- `npm start`: Start production server
+- `scripts/load-test.ts`: Load testing script (Usage: `npx tsx scripts/load-test.ts`)

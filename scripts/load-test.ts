@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const CHANNEL_SECRET = process.env.CHANNEL_SECRET;
-const WEBHOOK_URL = "http://localhost:3000/api/line/webhook";
+const WEBHOOK_URL = process.env.WEBHOOK_URL || "http://localhost:3000/api/line/webhook";
 
 if (!CHANNEL_SECRET) {
   console.error("Error: CHANNEL_SECRET is not set in .env");
