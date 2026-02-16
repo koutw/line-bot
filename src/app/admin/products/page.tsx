@@ -23,6 +23,8 @@ import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Minus, Pencil, Trash2 } from "lucide-react";
 
+import { cn, formatDate } from "@/lib/utils";
+
 interface ProductVariant {
   size: string;
   price: number;
@@ -34,6 +36,7 @@ interface Product {
   name: string;
   keyword: string;
   variants: ProductVariant[];
+  createdAt: string;
 }
 
 export default function ProductsPage() {
@@ -374,6 +377,7 @@ export default function ProductsPage() {
                   onCheckedChange={toggleSelectAll}
                 />
               </TableHead>
+              <TableHead>建立日期</TableHead>
               <TableHead>代號</TableHead>
               <TableHead>名稱</TableHead>
               <TableHead>價格區間</TableHead>
@@ -384,7 +388,7 @@ export default function ProductsPage() {
           <TableBody>
             {products.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                   {activeTab === "ACTIVE" ? "沒有目前商品。" : "沒有歷史商品。"}
                 </TableCell>
               </TableRow>
@@ -403,6 +407,9 @@ export default function ProductsPage() {
                         checked={selectedProducts.includes(product.id)}
                         onCheckedChange={() => toggleSelect(product.id)}
                       />
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {formatDate(product.createdAt)}
                     </TableCell>
                     <TableCell className="font-mono">{product.keyword}</TableCell>
                     <TableCell>{product.name}</TableCell>

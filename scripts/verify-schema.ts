@@ -10,32 +10,48 @@ async function main() {
   const keyword = 'TEST001';
   console.log(`Creating/Updating product with keyword: ${keyword}`);
 
-  const product = await prisma.product.upsert({
-    where: { keyword },
-    update: {
-      name: 'Test Product',
-      variants: {
-        deleteMany: {},
-        create: [
-          { size: 'S', price: 100, stock: 10 },
-          { size: 'M', price: 120, stock: 10 },
-          { size: 'L', price: 150, stock: 10 },
-        ]
-      }
-    },
-    create: {
-      keyword,
-      name: 'Test Product',
-      variants: {
-        create: [
-          { size: 'S', price: 100, stock: 10 },
-          { size: 'M', price: 120, stock: 10 },
-          { size: 'L', price: 150, stock: 10 },
-        ]
-      }
-    },
-    include: { variants: true }
+  /* 
+   * Since 'keyword' is not unique, we cannot use upsert with where: { keyword }.
+   * We must find the first product with this keyword and update it, or create a new one.
+   */
+  const existingProduct = await prisma.product.findFirst({
+    where: { keyword }
   });
+
+  let product;
+
+  if (existingProduct) {
+    product = await prisma.product.update({
+      where: { id: existingProduct.id },
+      data: {
+        name: 'Test Product',
+        variants: {
+          deleteMany: {},
+          create: [
+            { size: 'S', price: 100, stock: 10 },
+            { size: 'M', price: 120, stock: 10 },
+            { size: 'L', price: 150, stock: 10 },
+          ]
+        }
+      },
+      include: { variants: true }
+    });
+  } else {
+    product = await prisma.product.create({
+      data: {
+        keyword,
+        name: 'Test Product',
+        variants: {
+          create: [
+            { size: 'S', price: 100, stock: 10 },
+            { size: 'M', price: 120, stock: 10 },
+            { size: 'L', price: 150, stock: 10 },
+          ]
+        }
+      },
+      include: { variants: true }
+    });
+  }
   console.log('Product created:', product);
 
   if (product.variants.length !== 3) {

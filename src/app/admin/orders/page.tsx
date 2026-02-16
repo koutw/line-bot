@@ -43,7 +43,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 
 interface Order {
   id: string;
@@ -469,7 +469,7 @@ export default function OrdersPage() {
                     />
                   </TableCell>
                   <TableCell>
-                    {new Date(order.createdAt).toLocaleDateString()}
+                    {formatDate(order.createdAt)}
                   </TableCell>
                   <TableCell>
                     <div className="font-medium">{order.user.name || "未知"}</div>
