@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
   const order = searchParams.get("order") === "asc" ? "asc" : "desc";
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
+  const keyword = searchParams.get("keyword");
 
   const where: any = {};
   if (status) {
@@ -17,6 +18,12 @@ export async function GET(req: NextRequest) {
     } else {
       where.status = status;
     }
+  }
+
+  if (keyword) {
+    where.product = {
+      keyword: keyword,
+    };
   }
 
   if (startDate && endDate) {

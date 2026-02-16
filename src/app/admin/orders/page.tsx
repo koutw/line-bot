@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Download, Trash2, Truck, CheckCircle, PackageCheck, AlertCircle } from "lucide-react";
+import { Download, Trash2, Truck, CheckCircle, PackageCheck, AlertCircle, MoreHorizontal } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -30,6 +30,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +56,12 @@ interface Order {
   createdAt: string;
 }
 
+interface Product {
+  id: string;
+  keyword: string;
+  name: string;
+}
+
 const STATUS_OPTIONS = [
   { value: "CONFIRMED", label: "已確認", color: "bg-green-200 text-green-800", icon: CheckCircle },
   { value: "SHIPPING", label: "出貨中", color: "bg-yellow-200 text-yellow-800", icon: Truck },
@@ -53,9 +71,14 @@ const STATUS_OPTIONS = [
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "desc" });
+
+  // Filters
+  const [filterKeyword, setFilterKeyword] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
 
   // Delete Modal State
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -65,6 +88,14 @@ export default function OrdersPage() {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportStatuses, setExportStatuses] = useState<string[]>(["CONFIRMED"]);
 
+  // Inline Edit Popover State (track open popover ID to ensure only one opens - simpler to let Popover handle it per row)
+
+  const fetchProducts = async () => {
+    const res = await fetch("/api/products");
+    const data = await res.json();
+    setProducts(data);
+  };
+
   const fetchOrders = async () => {
     const params = new URLSearchParams();
     if (dateRange.start) params.append("startDate", dateRange.start);
@@ -72,14 +103,21 @@ export default function OrdersPage() {
     params.append("sort", sortConfig.key);
     params.append("order", sortConfig.direction);
 
+    if (filterKeyword && filterKeyword !== "all") params.append("keyword", filterKeyword);
+    if (filterStatus && filterStatus !== "all") params.append("status", filterStatus);
+
     const res = await fetch(`/api/orders?${params.toString()}`);
     const data = await res.json();
     setOrders(data);
   };
 
   useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  useEffect(() => {
     fetchOrders();
-  }, [dateRange, sortConfig]);
+  }, [dateRange, sortConfig, filterKeyword, filterStatus]);
 
   const toggleSelectAll = () => {
     if (selectedOrders.length === orders.length) {
@@ -124,7 +162,7 @@ export default function OrdersPage() {
 
       if (res.ok) {
         toast.success(`已更新 ${ids.length} 筆訂單狀態`);
-        fetchOrders();
+        fetchOrders(); // Refresh list to reflect changes
         setSelectedOrders([]);
       } else {
         toast.error("更新失敗");
@@ -132,6 +170,12 @@ export default function OrdersPage() {
     } catch (e) {
       toast.error("發生錯誤");
     }
+  };
+
+  const handleSingleStatusUpdate = async (id: string, status: string) => {
+    // Direct update for single item inline
+    await updateStatus([id], status);
+    // Ensure popover closes (it should automatically on click usually, or we verify)
   };
 
   const handleSort = (key: string) => {
@@ -146,6 +190,7 @@ export default function OrdersPage() {
     if (dateRange.start) params.append("startDate", dateRange.start);
     if (dateRange.end) params.append("endDate", dateRange.end);
     if (exportStatuses.length > 0) params.append("status", exportStatuses.join(","));
+    if (filterKeyword && filterKeyword !== "all") params.append("keyword", filterKeyword);
 
     window.open(`/api/orders/export?${params.toString()}`, "_blank");
     setIsExportOpen(false);
@@ -182,6 +227,38 @@ export default function OrdersPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+
+          <div className="flex flex-col gap-1 w-[130px]">
+            <Label className="text-xs">商品代碼</Label>
+            <Select value={filterKeyword} onValueChange={setFilterKeyword}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="全部" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部</SelectItem>
+                {products.map((p) => (
+                  <SelectItem key={p.id} value={p.keyword}>
+                    {p.keyword} - {p.name.slice(0, 10)}...
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1 w-[130px]">
+            <Label className="text-xs">狀態篩選</Label>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="全部" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部</SelectItem>
+                {STATUS_OPTIONS.map((status) => (
+                  <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="flex flex-col gap-1">
             <Label className="text-xs">開始日期</Label>
@@ -259,12 +336,13 @@ export default function OrdersPage() {
                 總金額 {sortConfig.key === "totalAmount" && (sortConfig.direction === "asc" ? "↑" : "↓")}
               </TableHead>
               <TableHead>狀態</TableHead>
+              <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   目前沒有訂單記錄。
                 </TableCell>
               </TableRow>
@@ -306,6 +384,30 @@ export default function OrdersPage() {
                         </div>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-40 p-0" align="end">
+                        <div className="grid gap-1 p-1">
+                          {STATUS_OPTIONS.map((status) => (
+                            <Button
+                              key={status.value}
+                              variant="ghost"
+                              className="justify-start h-8 text-xs font-normal"
+                              onClick={() => handleSingleStatusUpdate(order.id, status.value)}
+                            >
+                              <status.icon className="mr-2 h-3 w-3" />
+                              {status.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </TableCell>
                 </TableRow>
               ))
