@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
           if (!userId) return;
 
           // --- ADMIN PRODUCT UPLOAD ---
-          if (text.startsWith("連線商品")) {
+          if (text.includes("連線商品")) {
             // Check if user is ADMIN (you might want to verify robust admin check later, for now we trust the specific format or check role)
             // For MVP, we'll check role if possible, but let's assume the specific format is enough or check DB
             let user = await prisma.user.findUnique({ where: { lineId: userId } });
@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
             }
 
             // Parse usage:
-            // 連線商品-1
+            // ✨ 大家好新品上架 ✨
+            // 連線商品
             // 代號：N01
             // 商品名：adidas唐衣-紅
             // size：S、Ｍ、L
@@ -63,10 +64,7 @@ export async function POST(req: NextRequest) {
             let name = "";
             let sizes: string[] = [];
             let description = "";
-            let price = 0; // Price not in template? Default or parse? Requirements didn't specify Price field in template, but Product model needs it.
-            // Added Price to parsing for completeness or default to 0. 
-            // Wait, the user prompt didn't have Price. I'll default to 0 or look for it.
-            // User prompt: "代號", "商品名", "size", "商品描述". No price.
+            let price = 0;
 
             // Parse line by line
             for (const line of lines) {
@@ -90,7 +88,7 @@ export async function POST(req: NextRequest) {
             if (keyword && name) {
               // Create Product
               try {
-                // Upsert to update if exists? Or just create. Keyword is unique.
+                // Upsert to update if exists
                 const product = await prisma.product.upsert({
                   where: { keyword },
                   update: {
@@ -133,8 +131,8 @@ export async function POST(req: NextRequest) {
           // 數量：2
           // 尺寸：L
 
-          // Simple heuristic: starts with "代號"
-          if (text.startsWith("代號：") || text.startsWith("代號:")) {
+          // Simple heuristic: check if contains "代號" key
+          if (text.includes("代號：") || text.includes("代號:")) {
             const lines = text.split("\n");
             let keyword = "";
             let quantity = 1;
