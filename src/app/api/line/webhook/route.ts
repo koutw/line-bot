@@ -216,10 +216,7 @@ export async function POST(req: NextRequest) {
             // If setting value is "false", deny. Default to true if not set? Or default false?
             // User requested "turn off", so imply it's usually on. Let's assume enabled unless explicitly "false".
             if (setting?.value === "false") {
-              await client.replyMessage({
-                replyToken: event.replyToken,
-                messages: [{ type: "text", text: "🔒 目前非連線時間，暫不開放下單，謝謝！" }]
-              });
+              // Silently ignore if ordering is disabled
               return;
             }
 
