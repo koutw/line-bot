@@ -44,3 +44,6 @@ next-env.d.ts
 
 # local db
 *.db
+
+# local schema
+/prisma/schema.local.prisma

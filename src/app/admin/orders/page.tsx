@@ -167,6 +167,16 @@ export default function OrdersPage() {
       return;
     }
 
+    if (status === "ARCHIVE") {
+      await updateStatus(selectedOrders, undefined, undefined, true);
+      return;
+    }
+
+    if (status === "RESTORE") {
+      await updateStatus(selectedOrders, undefined, undefined, false);
+      return;
+    }
+
     // For "Delete" in History tab
     if (activeTab === "HISTORY" && status === "DELETE") {
       if (!confirm(`確定要永久刪除選取的 ${selectedOrders.length} 筆訂單嗎？`)) return;
@@ -215,12 +225,17 @@ export default function OrdersPage() {
     setDeleteReason("");
   };
 
-  const updateStatus = async (ids: string[], status: string, reason?: string) => {
+  const updateStatus = async (ids: string[], status?: string, reason?: string, isArchived?: boolean) => {
     try {
+      const payload: any = { ids };
+      if (status) payload.status = status;
+      if (reason) payload.deleteReason = reason;
+      if (isArchived !== undefined) payload.isArchived = isArchived;
+
       const res = await fetch("/api/orders", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids, status, deleteReason: reason }),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
