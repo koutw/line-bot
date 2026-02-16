@@ -38,6 +38,49 @@ export async function POST(req: NextRequest) {
 
           if (!userId) return;
 
+          // --- TOTAL AMOUNT INQUIRY ---
+          if (text === "總金額") {
+            const user = await prisma.user.findUnique({ where: { lineId: userId } });
+            if (!user) {
+              await client.replyMessage({
+                replyToken: event.replyToken,
+                messages: [{ type: "text", text: "目前沒有進行中的訂單喔！" }]
+              });
+              return;
+            }
+
+            const orders = await prisma.order.findMany({
+              where: {
+                userId: user.id,
+                isArchived: false,
+                status: { in: ["CONFIRMED", "PURCHASED"] }
+              },
+              include: { product: true }
+            });
+
+            if (orders.length === 0) {
+              await client.replyMessage({
+                replyToken: event.replyToken,
+                messages: [{ type: "text", text: "目前沒有進行中的訂單喔！" }]
+              });
+              return;
+            }
+
+            let totalAmount = 0;
+            const orderList = orders.map((order, index) => {
+              totalAmount += order.totalAmount;
+              return `${index + 1}. ${order.product.name} - ${order.size} x ${order.quantity} ($${order.totalAmount})`;
+            }).join("\n");
+
+            const replyText = `🛍️ 目前訂單明細：\n\n${orderList}\n\n💰 總金額：$${totalAmount}`;
+
+            await client.replyMessage({
+              replyToken: event.replyToken,
+              messages: [{ type: "text", text: replyText }]
+            });
+            return;
+          }
+
           // --- ADMIN PRODUCT UPLOAD ---
           if (text.includes("連線商品")) {
             let user = await prisma.user.findUnique({ where: { lineId: userId } });
@@ -161,12 +204,12 @@ export async function POST(req: NextRequest) {
           // 數量：2
           // 尺寸：L
 
-          // STRICT CHECK: Must contain ALL 3 keywords
+          // STRICT CHECK: Must contain Keyword AND Quantity. Size is optional (default F)
           const hasKeyword = text.includes("代號：") || text.includes("代號:");
           const hasQuantity = text.includes("數量：") || text.includes("數量:");
-          const hasSize = text.includes("尺寸：") || text.includes("尺寸:");
+          // const hasSize = text.includes("尺寸：") || text.includes("尺寸:");
 
-          if (hasKeyword && hasQuantity && hasSize) {
+          if (hasKeyword && hasQuantity) {
 
             // 0. Check Global Switch
             const setting = await prisma.systemSetting.findUnique({ where: { key: "ordering_enabled" } });
@@ -195,6 +238,9 @@ export async function POST(req: NextRequest) {
                 size = line.split(/：|:/)[1].trim();
               }
             }
+
+            // Default to F if size is empty
+            if (!size) size = "F";
 
             if (keyword) {
               // Find Product with Variants
@@ -253,7 +299,19 @@ export async function POST(req: NextRequest) {
               // Reply
               await client.replyMessage({
                 replyToken: event.replyToken,
-                messages: [{ type: "text", text: `✅ 訂單已確認！\n\n商品: ${product.name}\n尺寸: ${variant.size}\n數量: ${quantity}\n總金額: $${variant.price * quantity}\n謝謝您的購買！` }]
+                messages: [{
+                  type: "text", text: `✅ 訂單已確認！
+
+商品：${product.name}
+尺寸：${variant.size}
+數量：${quantity}
+金額：$${variant.price * quantity}
+
+喊單確認後無法更改或取消
+感謝您的購買！
+
+💬輸入關鍵字「總金額」
+即可查看目前喊單品項與總額` }]
               });
             }
             return;

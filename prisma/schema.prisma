@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -59,7 +59,8 @@ model Order {
   product   Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   quantity  Int         @default(1)
   size      String?     // e.g. "M"
-  status    String      @default("PENDING") // PENDING, CONFIRMED, PURCHASED, ...
+  status    String      @default("CONFIRMED") // CONFIRMED, PURCHASED, OUT_OF_STOCK, CANCELLED
+  isArchived Boolean    @default(false)
   deleteReason String? // Reason if deleted
   totalAmount Int
   createdAt DateTime    @default(now())

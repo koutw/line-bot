@@ -10,7 +10,14 @@ export async function GET(req: NextRequest) {
   const endDate = searchParams.get("endDate");
   const keyword = searchParams.get("keyword");
 
+  const archived = searchParams.get("archived");
+
   const where: any = {};
+
+  if (archived !== null) {
+    where.isArchived = archived === "true";
+  }
+
   if (status) {
     const statuses = status.split(",");
     if (statuses.length > 1) {
@@ -21,9 +28,16 @@ export async function GET(req: NextRequest) {
   }
 
   if (keyword) {
-    where.product = {
-      keyword: keyword,
-    };
+    const keywords = keyword.split(",");
+    if (keywords.length > 1) {
+      where.product = {
+        keyword: { in: keywords },
+      };
+    } else {
+      where.product = {
+        keyword: keyword,
+      };
+    }
   }
 
   if (startDate && endDate) {
@@ -51,7 +65,7 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { ids, status, deleteReason } = body;
+    const { ids, status, deleteReason, isArchived } = body;
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json(
@@ -67,8 +81,11 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const updateData: any = { status };
-    if (status === "DELETED" && deleteReason) {
+    const updateData: any = {};
+    if (status) updateData.status = status;
+    if (isArchived !== undefined) updateData.isArchived = isArchived;
+
+    if ((status === "CANCELLED" || status === "DELETED") && deleteReason) {
       updateData.deleteReason = deleteReason;
     }
 

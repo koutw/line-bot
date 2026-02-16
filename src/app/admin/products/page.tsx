@@ -27,7 +27,7 @@ import { cn, formatDate } from "@/lib/utils";
 
 interface ProductVariant {
   size: string;
-  price: number;
+  price: number | "";
   stock: number;
 }
 
@@ -53,8 +53,12 @@ export default function ProductsPage() {
     basePrice: "", // Helper to auto-fill variant prices
     description: "",
   });
-  const [variants, setVariants] = useState<{ size: string; price: number }[]>([
-    { size: "F", price: 0 }
+  const [variants, setVariants] = useState<{ size: string; price: number | "" }[]>([
+    { size: "S", price: 0 },
+    { size: "M", price: 0 },
+    { size: "L", price: 0 },
+    { size: "XL", price: 0 },
+    { size: "2XL", price: 0 }
   ]);
 
   const fetchProducts = async (status: string) => {
@@ -70,12 +74,12 @@ export default function ProductsPage() {
 
   const handleBasePriceChange = (val: string) => {
     setFormData({ ...formData, basePrice: val });
-    const price = parseInt(val) || 0;
+    const price = val === "" ? "" : (parseInt(val) || 0);
     setVariants(prev => prev.map(v => ({ ...v, price })));
   };
 
   const addVariant = () => {
-    setVariants([...variants, { size: "", price: parseInt(formData.basePrice) || 0 }]);
+    setVariants([...variants, { size: "", price: formData.basePrice ? parseInt(formData.basePrice) : 0 }]);
   };
 
   const removeVariant = (index: number) => {
@@ -87,7 +91,7 @@ export default function ProductsPage() {
   const updateVariant = (index: number, field: "size" | "price", value: string) => {
     const newVariants = [...variants];
     if (field === "price") {
-      newVariants[index].price = parseInt(value) || 0;
+      newVariants[index].price = value === "" ? "" : (parseInt(value) || 0);
     } else {
       newVariants[index].size = value;
     }
@@ -102,7 +106,7 @@ export default function ProductsPage() {
       description: "",
       basePrice: "",
     });
-    const mappedVariants = product.variants.map(v => ({ size: v.size, price: v.price }));
+    const mappedVariants = product.variants.map(v => ({ size: v.size, price: v.price as number | "" }));
     setVariants(mappedVariants.length > 0 ? mappedVariants : [{ size: "F", price: 0 }]);
     setIsOpen(true);
   };
@@ -110,7 +114,13 @@ export default function ProductsPage() {
   const handleAddClick = () => {
     setEditingId(null);
     setFormData({ name: "", keyword: "", basePrice: "", description: "" });
-    setVariants([{ size: "F", price: 0 }]);
+    setVariants([
+      { size: "S", price: 0 },
+      { size: "M", price: 0 },
+      { size: "L", price: 0 },
+      { size: "XL", price: 0 },
+      { size: "2XL", price: 0 }
+    ]);
     setIsOpen(true);
   };
 
@@ -193,11 +203,13 @@ export default function ProductsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const finalVariants = variants.filter(v => v.size.trim() !== "");
       const payload = {
         name: formData.name,
         keyword: formData.keyword,
         description: formData.description,
-        variants: variants.filter(v => v.size.trim() !== ""),
+        // If no variants defined (all filtered out), default to F with base price
+        variants: finalVariants.length > 0 ? finalVariants.map(v => ({ ...v, price: v.price === "" ? 0 : v.price })) : [{ size: "F", price: formData.basePrice ? parseInt(formData.basePrice) || 0 : 0 }],
         imageUrl: "",
       };
 
@@ -394,7 +406,7 @@ export default function ProductsPage() {
               </TableRow>
             ) : (
               products.map((product) => {
-                const prices = product.variants?.map(v => v.price) || [];
+                const prices = product.variants?.map(v => Number(v.price)).filter(p => !isNaN(p)) || [];
                 const minPrice = prices.length ? Math.min(...prices) : 0;
                 const maxPrice = prices.length ? Math.max(...prices) : 0;
                 const priceDisplay = minPrice === maxPrice ? `$${minPrice}` : `$${minPrice} ~ $${maxPrice}`;

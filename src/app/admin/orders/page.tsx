@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { cn, formatDate } from "@/lib/utils";
+import { MultiSelect, Option } from "@/components/ui/multi-select";
 
 interface Order {
   id: string;
@@ -62,12 +63,7 @@ interface Product {
   name: string;
 }
 
-const STATUS_OPTIONS = [
-  { value: "CONFIRMED", label: "已確認", color: "bg-green-100 text-green-800", icon: CheckCircle },
-  { value: "PURCHASED", label: "已採買", color: "bg-blue-100 text-blue-800", icon: PackageCheck },
-  { value: "OUT_OF_STOCK", label: "斷貨", color: "bg-red-100 text-red-800", icon: AlertCircle },
-  { value: "CANCELLED", label: "客人取消", color: "bg-gray-200 text-gray-800", icon: Trash2 },
-];
+
 
 export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState<"CURRENT" | "HISTORY">("CURRENT");
@@ -78,7 +74,7 @@ export default function OrdersPage() {
   const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "desc" });
 
   // Filters
-  const [filterKeyword, setFilterKeyword] = useState<string>("all");
+  const [filterKeywords, setFilterKeywords] = useState<string[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
 
   // Delete Modal State
@@ -89,21 +85,16 @@ export default function OrdersPage() {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportStatuses, setExportStatuses] = useState<string[]>(["CONFIRMED"]);
 
-  const TAB_STATUSES = {
-    CURRENT: ["PENDING", "CONFIRMED", "PURCHASED", "SHIPPING", "ARRIVED", "OUT_OF_STOCK"],
-    HISTORY: ["CANCELLED", "COMPLETED"],
-  };
+
 
   const STATUS_OPTIONS = [
-    { value: "PENDING", label: "待確認", color: "bg-gray-100 text-gray-800", icon: AlertCircle },
     { value: "CONFIRMED", label: "已確認", color: "bg-green-100 text-green-800", icon: CheckCircle },
     { value: "PURCHASED", label: "已採買", color: "bg-blue-100 text-blue-800", icon: PackageCheck },
-    { value: "SHIPPING", label: "運送中", color: "bg-purple-100 text-purple-800", icon: Truck },
-    { value: "ARRIVED", label: "已抵台", color: "bg-orange-100 text-orange-800", icon: CheckCircle },
     { value: "OUT_OF_STOCK", label: "斷貨", color: "bg-red-100 text-red-800", icon: AlertCircle },
-    { value: "COMPLETED", label: "已完成", color: "bg-slate-100 text-slate-800", icon: CheckCircle },
-    { value: "CANCELLED", label: "已取消", color: "bg-gray-200 text-gray-800", icon: Trash2 },
+    { value: "CANCELLED", label: "客人取消", color: "bg-gray-200 text-gray-800", icon: Trash2 },
   ];
+
+
 
   const fetchProducts = async () => {
     const res = await fetch("/api/products");
@@ -118,15 +109,23 @@ export default function OrdersPage() {
     params.append("sort", sortConfig.key);
     params.append("order", sortConfig.direction);
 
-    if (filterKeyword && filterKeyword !== "all") params.append("keyword", filterKeyword);
+    if (filterKeywords.length > 0) {
+      params.append("keyword", filterKeywords.join(","));
+    }
 
     // Filter Logic
+    // Filter Logic
+    // If specific status selected, filter by it.
+    // If "all", fetch ALL statuses but filter by ARCHIVED flag
     if (filterStatus && filterStatus !== "all") {
       params.append("status", filterStatus);
+    }
+
+    // TAB determines generic "Archived" status
+    if (activeTab === "CURRENT") {
+      params.append("archived", "false");
     } else {
-      // If "all", fetch all statuses valid for the current TAB
-      const validStatuses = TAB_STATUSES[activeTab];
-      params.append("status", validStatuses.join(","));
+      params.append("archived", "true");
     }
 
     const res = await fetch(`/api/orders?${params.toString()}`);
@@ -141,7 +140,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
-  }, [dateRange, sortConfig, filterKeyword, filterStatus, activeTab]);
+  }, [dateRange, sortConfig, filterKeywords, filterStatus, activeTab]);
 
   const toggleSelectAll = () => {
     if (selectedOrders.length === orders.length) {
@@ -274,7 +273,8 @@ export default function OrdersPage() {
     if (dateRange.start) params.append("startDate", dateRange.start);
     if (dateRange.end) params.append("endDate", dateRange.end);
     if (exportStatuses.length > 0) params.append("status", exportStatuses.join(","));
-    if (filterKeyword && filterKeyword !== "all") params.append("keyword", filterKeyword);
+    if (exportStatuses.length > 0) params.append("status", exportStatuses.join(","));
+    if (filterKeywords.length > 0) params.append("keyword", filterKeywords.join(","));
 
     window.open(`/api/orders/export?${params.toString()}`, "_blank");
     setIsExportOpen(false);
@@ -289,7 +289,7 @@ export default function OrdersPage() {
     );
   };
 
-  const currentTabOptions = STATUS_OPTIONS.filter(o => TAB_STATUSES[activeTab].includes(o.value));
+  const currentTabOptions = STATUS_OPTIONS; // Now same for both tabs basically, filtered by archived
 
   return (
     <div className="space-y-4">
@@ -323,38 +323,40 @@ export default function OrdersPage() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
                   {activeTab === "CURRENT" ? (
-                    // Current Tab Actions
-                    STATUS_OPTIONS.filter(o => TAB_STATUSES.CURRENT.includes(o.value) || o.value === "COMPLETED" || o.value === "CANCELLED").map((option) => (
-                      <DropdownMenuItem key={option.value} onClick={() => handleBatchStatus(option.value)}>
-                        <option.icon className="mr-2 h-4 w-4" />
-                        {option.label}
+                    <>
+                      {STATUS_OPTIONS.map((option) => (
+                        <DropdownMenuItem key={option.value} onClick={() => handleBatchStatus(option.value)}>
+                          <option.icon className="mr-2 h-4 w-4" />
+                          {option.label}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuItem onClick={() => handleBatchStatus("ARCHIVE")}>
+                        <CheckCircle className="mr-2 h-4 w-4" /> 移入歷史
                       </DropdownMenuItem>
-                    ))
+                    </>
                   ) : (
-                    // History Tab Actions
-                    <DropdownMenuItem onClick={() => handleBatchStatus("DELETE")}>
-                      <Trash2 className="mr-2 h-4 w-4" /> 永久刪除
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem onClick={() => handleBatchStatus("RESTORE")}>
+                        <CheckCircle className="mr-2 h-4 w-4" /> 移回目前
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleBatchStatus("DELETE")}>
+                        <Trash2 className="mr-2 h-4 w-4" /> 永久刪除
+                      </DropdownMenuItem>
+                    </>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
 
-            <div className="flex flex-col gap-1 w-[130px]">
+            <div className="flex flex-col gap-1 w-[200px]">
               <Label className="text-xs">商品代碼</Label>
-              <Select value={filterKeyword} onValueChange={setFilterKeyword}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="全部" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部</SelectItem>
-                  {products.map((p) => (
-                    <SelectItem key={p.id} value={p.keyword}>
-                      {p.keyword} - {p.name.slice(0, 10)}...
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={products.map((p) => ({ label: `${p.keyword} - ${p.name}`, value: p.keyword }))}
+                selected={filterKeywords}
+                onChange={setFilterKeywords}
+                placeholder="全部"
+                searchPlaceholder="搜尋代碼或名稱..."
+              />
             </div>
 
             <div className="flex flex-col gap-1 w-[130px]">
