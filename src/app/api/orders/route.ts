@@ -74,9 +74,9 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    if (!status) {
+    if (!status && isArchived === undefined) {
       return NextResponse.json(
-        { message: "Missing status" },
+        { message: "Missing update fields (status or isArchived)" },
         { status: 400 }
       );
     }
