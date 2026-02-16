@@ -70,6 +70,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function OrdersPage() {
+  const [activeTab, setActiveTab] = useState<"CURRENT" | "HISTORY">("CURRENT");
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -88,12 +89,26 @@ export default function OrdersPage() {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportStatuses, setExportStatuses] = useState<string[]>(["CONFIRMED"]);
 
-  // Inline Edit Popover State (track open popover ID to ensure only one opens - simpler to let Popover handle it per row)
+  const TAB_STATUSES = {
+    CURRENT: ["PENDING", "CONFIRMED", "PURCHASED", "SHIPPING", "ARRIVED", "OUT_OF_STOCK"],
+    HISTORY: ["CANCELLED", "COMPLETED"],
+  };
+
+  const STATUS_OPTIONS = [
+    { value: "PENDING", label: "待確認", color: "bg-gray-100 text-gray-800", icon: AlertCircle },
+    { value: "CONFIRMED", label: "已確認", color: "bg-green-100 text-green-800", icon: CheckCircle },
+    { value: "PURCHASED", label: "已採買", color: "bg-blue-100 text-blue-800", icon: PackageCheck },
+    { value: "SHIPPING", label: "運送中", color: "bg-purple-100 text-purple-800", icon: Truck },
+    { value: "ARRIVED", label: "已抵台", color: "bg-orange-100 text-orange-800", icon: CheckCircle },
+    { value: "OUT_OF_STOCK", label: "斷貨", color: "bg-red-100 text-red-800", icon: AlertCircle },
+    { value: "COMPLETED", label: "已完成", color: "bg-slate-100 text-slate-800", icon: CheckCircle },
+    { value: "CANCELLED", label: "已取消", color: "bg-gray-200 text-gray-800", icon: Trash2 },
+  ];
 
   const fetchProducts = async () => {
     const res = await fetch("/api/products");
     const data = await res.json();
-    setProducts(data);
+    setProducts(Array.isArray(data) ? data : []);
   };
 
   const fetchOrders = async () => {
@@ -104,11 +119,20 @@ export default function OrdersPage() {
     params.append("order", sortConfig.direction);
 
     if (filterKeyword && filterKeyword !== "all") params.append("keyword", filterKeyword);
-    if (filterStatus && filterStatus !== "all") params.append("status", filterStatus);
+
+    // Filter Logic
+    if (filterStatus && filterStatus !== "all") {
+      params.append("status", filterStatus);
+    } else {
+      // If "all", fetch all statuses valid for the current TAB
+      const validStatuses = TAB_STATUSES[activeTab];
+      params.append("status", validStatuses.join(","));
+    }
 
     const res = await fetch(`/api/orders?${params.toString()}`);
     const data = await res.json();
-    setOrders(data);
+    setOrders(Array.isArray(data) ? data : []);
+    setSelectedOrders([]); // Clear selection on fetch
   };
 
   useEffect(() => {
@@ -117,7 +141,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
-  }, [dateRange, sortConfig, filterKeyword, filterStatus]);
+  }, [dateRange, sortConfig, filterKeyword, filterStatus, activeTab]);
 
   const toggleSelectAll = () => {
     if (selectedOrders.length === orders.length) {
@@ -138,8 +162,47 @@ export default function OrdersPage() {
   const handleBatchStatus = async (status: string) => {
     if (selectedOrders.length === 0) return;
 
-    if (status === "CANCELLED") {
+    if (status === "CANCELLED" && activeTab === "CURRENT") {
+      // Moving to history (soft delete/cancel)
       setIsDeleteOpen(true);
+      return;
+    }
+
+    // For "Delete" in History tab
+    if (activeTab === "HISTORY" && status === "DELETE") {
+      if (!confirm(`確定要永久刪除選取的 ${selectedOrders.length} 筆訂單嗎？`)) return;
+      // API for hard delete orders? PATCH status?
+      // Current API uses PATCH status. We need a DELETE method or status="DELETED" which actually deletes?
+      // Admin requirements said "History can be deleted". 
+      // Currently backend PATCH implies update status. 
+      // I should probably add a DELETE method to api/orders OR treat "DELETED" status as hard delete logic in backend?
+      // Wait, backend logic for PATCH status='DELETED' is only updating status to 'DELETED' (if enum allows) or it's not implementing real delete?
+      // Looking at api/orders/route.ts, PATCH updates status.
+      // Product logic implements real DELETE.
+      // Order logic should implement real DELETE for cleanup.
+      // However, `api/orders` doesn't have DELETE method yet.
+      // I should rely on "CANCELLED" as the "move to history".
+      // And "Delete" button in History should call a real DELETE. 
+      // Since I didn't update api/orders DELETE yet, I'll temporarily use PATCH status="CANCELLED" as the "Delete" from Current.
+      // For History Tab "Delete", I need a DELETE endpoint. 
+      // OR I can use `status="DELETED"` and filter it out?
+      // The requirement is "Safe deletion of only historical items". 
+      // So I should implement DELETE in api/orders/route.ts.
+      // For now, let's assume I will add DELETE to api/orders/route.ts next.
+      // I will stick to calling DELETE method here.
+      try {
+        const res = await fetch("/api/orders", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: selectedOrders }),
+        });
+        if (res.ok) {
+          toast.success("永久刪除成功");
+          fetchOrders();
+        } else {
+          toast.error("刪除失敗");
+        }
+      } catch (e) { toast.error("刪除失敗"); }
       return;
     }
 
@@ -147,6 +210,7 @@ export default function OrdersPage() {
   };
 
   const handleDeleteConfirm = async () => {
+    // This is for "Cancelling" orders (moving to history) with reason
     await updateStatus(selectedOrders, "CANCELLED", deleteReason);
     setIsDeleteOpen(false);
     setDeleteReason("");
@@ -181,6 +245,23 @@ export default function OrdersPage() {
     await updateStatus([id], status);
   };
 
+  const handleSingleDelete = async (id: string) => {
+    if (!confirm("確定要永久刪除此訂單嗎？")) return;
+    try {
+      const res = await fetch("/api/orders", {
+        method: "DELETE", // We need to add this
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [id] }),
+      });
+      if (res.ok) {
+        toast.success("已刪除");
+        fetchOrders();
+      } else {
+        toast.error("刪除失敗");
+      }
+    } catch (e) { toast.error("刪除失敗"); }
+  }
+
   const handleSort = (key: string) => {
     setSortConfig((current) => ({
       key,
@@ -208,112 +289,141 @@ export default function OrdersPage() {
     );
   };
 
+  const currentTabOptions = STATUS_OPTIONS.filter(o => TAB_STATUSES[activeTab].includes(o.value));
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4">
         <h2 className="text-2xl font-bold tracking-tight">訂單記錄</h2>
-        <div className="flex flex-wrap items-end gap-2">
-          {selectedOrders.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+
+        {/* Custom Tabs */}
+        <div className="flex gap-2 border-b pb-2">
+          <Button
+            variant={activeTab === "CURRENT" ? "default" : "ghost"}
+            onClick={() => { setActiveTab("CURRENT"); setFilterStatus("all"); }}
+          >
+            目前訂單 (Current)
+          </Button>
+          <Button
+            variant={activeTab === "HISTORY" ? "default" : "ghost"}
+            onClick={() => { setActiveTab("HISTORY"); setFilterStatus("all"); }}
+          >
+            歷史訂單 (History)
+          </Button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-end gap-2">
+            {selectedOrders.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant={activeTab === "HISTORY" ? "destructive" : "outline"} size="sm">
+                    {activeTab === "HISTORY" ? "批次刪除" : "批次更新狀態"} ({selectedOrders.length})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  {activeTab === "CURRENT" ? (
+                    // Current Tab Actions
+                    STATUS_OPTIONS.filter(o => TAB_STATUSES.CURRENT.includes(o.value) || o.value === "COMPLETED" || o.value === "CANCELLED").map((option) => (
+                      <DropdownMenuItem key={option.value} onClick={() => handleBatchStatus(option.value)}>
+                        <option.icon className="mr-2 h-4 w-4" />
+                        {option.label}
+                      </DropdownMenuItem>
+                    ))
+                  ) : (
+                    // History Tab Actions
+                    <DropdownMenuItem onClick={() => handleBatchStatus("DELETE")}>
+                      <Trash2 className="mr-2 h-4 w-4" /> 永久刪除
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            <div className="flex flex-col gap-1 w-[130px]">
+              <Label className="text-xs">商品代碼</Label>
+              <Select value={filterKeyword} onValueChange={setFilterKeyword}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="全部" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部</SelectItem>
+                  {products.map((p) => (
+                    <SelectItem key={p.id} value={p.keyword}>
+                      {p.keyword} - {p.name.slice(0, 10)}...
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1 w-[130px]">
+              <Label className="text-xs">狀態篩選</Label>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="全部" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部</SelectItem>
+                  {currentTabOptions.map((status) => (
+                    <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">開始日期</Label>
+              <Input
+                type="date"
+                className="w-[130px] h-8 text-xs"
+                value={dateRange.start}
+                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">結束日期</Label>
+              <Input
+                type="date"
+                className="w-[130px] h-8 text-xs"
+                value={dateRange.end}
+                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+              />
+            </div>
+
+            <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>
+              <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
-                  批次更新狀態 ({selectedOrders.length})
+                  <Download className="mr-2 h-4 w-4" />
+                  匯出 CSV
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                {STATUS_OPTIONS.map((option) => (
-                  <DropdownMenuItem key={option.value} onClick={() => handleBatchStatus(option.value)}>
-                    <option.icon className="mr-2 h-4 w-4" />
-                    {option.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-
-          <div className="flex flex-col gap-1 w-[130px]">
-            <Label className="text-xs">商品代碼</Label>
-            <Select value={filterKeyword} onValueChange={setFilterKeyword}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="全部" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                {products.map((p) => (
-                  <SelectItem key={p.id} value={p.keyword}>
-                    {p.keyword} - {p.name.slice(0, 10)}...
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>匯出訂單</DialogTitle>
+                  <DialogDescription>選擇要匯出的訂單狀態</DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col gap-2 py-4">
+                  {STATUS_OPTIONS.map((option) => (
+                    <div key={option.value} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`export-${option.value}`}
+                        checked={exportStatuses.includes(option.value)}
+                        onCheckedChange={(checked) => {
+                          if (checked) setExportStatuses([...exportStatuses, option.value]);
+                          else setExportStatuses(exportStatuses.filter(s => s !== option.value));
+                        }}
+                      />
+                      <Label htmlFor={`export-${option.value}`}>{option.label}</Label>
+                    </div>
+                  ))}
+                </div>
+                <DialogFooter>
+                  <Button onClick={handleExport}>確認匯出</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
-
-          <div className="flex flex-col gap-1 w-[130px]">
-            <Label className="text-xs">狀態篩選</Label>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="全部" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                {STATUS_OPTIONS.map((status) => (
-                  <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs">開始日期</Label>
-            <Input
-              type="date"
-              className="w-[130px] h-8 text-xs"
-              value={dateRange.start}
-              onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs">結束日期</Label>
-            <Input
-              type="date"
-              className="w-[130px] h-8 text-xs"
-              value={dateRange.end}
-              onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-            />
-          </div>
-
-          <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Download className="mr-2 h-4 w-4" />
-                匯出 CSV
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>匯出訂單</DialogTitle>
-                <DialogDescription>選擇要匯出的訂單狀態</DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col gap-2 py-4">
-                {STATUS_OPTIONS.map((option) => (
-                  <div key={option.value} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`export-${option.value}`}
-                      checked={exportStatuses.includes(option.value)}
-                      onCheckedChange={(checked) => {
-                        if (checked) setExportStatuses([...exportStatuses, option.value]);
-                        else setExportStatuses(exportStatuses.filter(s => s !== option.value));
-                      }}
-                    />
-                    <Label htmlFor={`export-${option.value}`}>{option.label}</Label>
-                  </div>
-                ))}
-              </div>
-              <DialogFooter>
-                <Button onClick={handleExport}>確認匯出</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
@@ -346,7 +456,7 @@ export default function OrdersPage() {
             {orders.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                  目前沒有訂單記錄。
+                  {activeTab === "CURRENT" ? "目前沒有處理中的訂單。" : "沒有歷史訂單。"}
                 </TableCell>
               </TableRow>
             ) : (
@@ -389,28 +499,35 @@ export default function OrdersPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-40 p-0" align="end">
-                        <div className="grid gap-1 p-1">
-                          {STATUS_OPTIONS.map((status) => (
-                            <Button
-                              key={status.value}
-                              variant="ghost"
-                              className="justify-start h-8 text-xs font-normal"
-                              onClick={() => handleSingleStatusUpdate(order.id, status.value)}
-                            >
-                              <status.icon className="mr-2 h-3 w-3" />
-                              {status.label}
-                            </Button>
-                          ))}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                    {activeTab === "CURRENT" ? (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-40 p-0" align="end">
+                          <div className="grid gap-1 p-1">
+                            {STATUS_OPTIONS.filter(o => o.value !== "PENDING").map((status) => (
+                              <Button
+                                key={status.value}
+                                variant="ghost"
+                                className="justify-start h-8 text-xs font-normal"
+                                onClick={() => handleSingleStatusUpdate(order.id, status.value)}
+                              >
+                                <status.icon className="mr-2 h-3 w-3" />
+                                {status.label}
+                              </Button>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    ) : (
+                      // HISTORY ACTIONS
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleSingleDelete(order.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

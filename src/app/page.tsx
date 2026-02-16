@@ -11,7 +11,7 @@ export default function Home() {
         </p>
         <div className="flex gap-4 justify-center">
           <Link href="/admin/products">
-            <Button size="lg">Go to Dashboard</Button>
+            <Button size="lg">前往後台</Button>
           </Link>
         </div>
       </div>

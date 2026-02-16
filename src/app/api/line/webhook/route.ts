@@ -91,10 +91,10 @@ export async function POST(req: NextRequest) {
               if (keyword && name) {
                 try {
                   // Update or Create Product
-                  // Since variants logic is complex (add/remove), for simplicity in this "upsert" simulation:
-                  // We will find existing, delete variants, and recreate them.
-
-                  const existing = await prisma.product.findUnique({ where: { keyword } });
+                  // Use findFirst because keyword is not unique across history
+                  const existing = await prisma.product.findFirst({
+                    where: { keyword: keyword, status: "ACTIVE" }
+                  });
 
                   if (existing) {
                     // Update basic info
@@ -123,6 +123,7 @@ export async function POST(req: NextRequest) {
                         keyword,
                         name,
                         description: description === "無" ? null : description,
+                        status: "ACTIVE",
                         variants: {
                           create: variantsData.map(v => ({
                             size: v.size,
@@ -197,8 +198,8 @@ export async function POST(req: NextRequest) {
 
             if (keyword) {
               // Find Product with Variants
-              const product = await prisma.product.findUnique({
-                where: { keyword },
+              const product = await prisma.product.findFirst({
+                where: { keyword: keyword, status: "ACTIVE" },
                 include: { variants: true }
               });
 

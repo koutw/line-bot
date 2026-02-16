@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -26,15 +26,18 @@ model SystemSetting {
 
 model Product {
   id          String   @id @default(uuid())
-  keyword     String   @unique // e.g. "A01"
+  keyword     String   // e.g. "A01" (Not unique anymore)
   name        String
   description String?
   imageUrl    String?
+  status      String   @default("ACTIVE") // ACTIVE, ARCHIVED
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   variants    ProductVariant[]
   orders      Order[]
+
+  @@index([keyword])
 }
 
 model ProductVariant {

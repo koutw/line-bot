@@ -95,7 +95,7 @@ export default function AdminLayout({
               </nav>
             </SheetContent>
           </Sheet>
-          <h1 className="text-xl font-semibold">Dashboard</h1>
+          <h1 className="text-xl font-semibold">管理後台</h1>
         </header>
         <main className="p-4 sm:px-6 sm:py-0 overflow-x-hidden">{children}</main>
       </div>

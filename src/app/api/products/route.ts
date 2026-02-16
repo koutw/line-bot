@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url);
+    const status = searchParams.get("status") || "ACTIVE";
+
     const products = await prisma.product.findMany({
+      where: { status },
       include: { variants: true },
       orderBy: { createdAt: "desc" },
     });
@@ -19,15 +23,23 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, keyword, description, imageUrl, variants } = body;
 
-    // variants should be an array of { size, price, stock }
-    // If legacy format is sent, default to "F" size? 
-    // For now assuming the admin UI (or webhook) sends correct structure.
+    const upperKeyword = keyword.toUpperCase();
+
+    // Check if ACTIVE product with same keyword exists
+    const existing = await prisma.product.findFirst({
+      where: { keyword: upperKeyword, status: "ACTIVE" },
+    });
+
+    if (existing) {
+      return NextResponse.json({ error: `Start keyword ${upperKeyword} is already in use.` }, { status: 409 });
+    }
 
     const productData: any = {
       name,
-      keyword: keyword.toUpperCase(),
+      keyword: upperKeyword,
       description,
       imageUrl,
+      status: "ACTIVE",
     };
 
     if (variants && Array.isArray(variants)) {
@@ -71,33 +83,56 @@ export async function DELETE(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, name, keyword, description, imageUrl, variants } = body;
+    const { id, name, keyword, description, imageUrl, variants, status } = body;
 
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     // Transaction to update product and replace variants
     await prisma.$transaction(async (tx) => {
-      // 1. Update Product
+      // 1. Check for Uniqueness if setting to ACTIVE or changing keyword of an ACTIVE product
+      // We need to fetch current product first to know its current status if not provided
+      const currentProduct = await tx.product.findUnique({ where: { id } });
+      if (!currentProduct) throw new Error("Product not found");
+
+      const targetStatus = status || currentProduct.status;
+      const targetKeyword = keyword ? keyword.toUpperCase() : currentProduct.keyword;
+
+      if (targetStatus === "ACTIVE") {
+        const existing = await tx.product.findFirst({
+          where: {
+            keyword: targetKeyword,
+            status: "ACTIVE",
+            id: { not: id }, // Exclude self
+          },
+        });
+        if (existing) {
+          throw new Error(`Start keyword ${targetKeyword} is already in use by another ACTIVE product.`);
+        }
+      }
+
+      // 2. Update Product
+      const updateData: any = {};
+      if (name) updateData.name = name;
+      if (keyword) updateData.keyword = targetKeyword;
+      if (description !== undefined) updateData.description = description;
+      if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+      if (status) updateData.status = status;
+
       await tx.product.update({
         where: { id },
-        data: {
-          name,
-          keyword: keyword.toUpperCase(),
-          description,
-          imageUrl,
-        },
+        data: updateData,
       });
 
-      // 2. Manage Variants (Full Replacement)
-      await tx.productVariant.deleteMany({ where: { productId: id } });
-
+      // 2. Manage Variants (Full Replacement) - Only if variants provided
       if (variants && Array.isArray(variants)) {
+        await tx.productVariant.deleteMany({ where: { productId: id } });
+
         await tx.productVariant.createMany({
           data: variants.map((v: any) => ({
             productId: id,
             size: v.size,
             price: Number(v.price),
-            stock: 0, // Default to 0 as stock management is removed from UI
+            stock: 0,
           })),
         });
       }
@@ -109,3 +144,5 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Failed to update product" }, { status: 500 });
   }
 }
+
+
