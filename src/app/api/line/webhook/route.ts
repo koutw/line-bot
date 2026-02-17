@@ -237,9 +237,6 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            // Default to F if size is empty
-            if (!size) size = "F";
-
             if (keyword) {
               // Find Product with Variants
               const product = await prisma.product.findFirst({
@@ -250,9 +247,22 @@ export async function POST(req: NextRequest) {
               if (!product) {
                 await client.replyMessage({
                   replyToken: event.replyToken,
+
                   messages: [{ type: "text", text: `❓ 找不到代號為 ${keyword} 的商品。` }]
                 });
                 return;
+              }
+
+              // Default size logic:
+              // 1. If user didn't specify size (or empty)
+              // 2. If product has exactly 1 variant -> Use that variant
+              // 3. Otherwise default to "F"
+              if (!size) {
+                if (product.variants.length === 1) {
+                  size = product.variants[0].size;
+                } else {
+                  size = "F";
+                }
               }
 
               // 1. Find matched variant
