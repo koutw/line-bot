@@ -47,6 +47,7 @@ model ProductVariant {
   size      String
   price     Int
   stock     Int?
+  sold      Int     @default(0)
 
   @@unique([productId, size])
 }

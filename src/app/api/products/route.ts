@@ -133,6 +133,7 @@ export async function PATCH(req: NextRequest) {
             size: v.size,
             price: Number(v.price),
             stock: (v.stock === null || v.stock === undefined || v.stock === "") ? undefined : Number(v.stock),
+            sold: v.sold ? Number(v.sold) : 0,
           })),
         });
       }

@@ -29,6 +29,7 @@ interface ProductVariant {
   size: string;
   price: number | "";
   stock: number | ""; // Allow empty string for infinite
+  sold: number;
 }
 
 interface Product {
@@ -54,12 +55,12 @@ export default function ProductsPage() {
     baseStock: "", // Helper to auto-fill variant stock
     description: "",
   });
-  const [variants, setVariants] = useState<{ size: string; price: number | ""; stock: number | "" }[]>([
-    { size: "S", price: 0, stock: "" },
-    { size: "M", price: 0, stock: "" },
-    { size: "L", price: 0, stock: "" },
-    { size: "XL", price: 0, stock: "" },
-    { size: "2XL", price: 0, stock: "" }
+  const [variants, setVariants] = useState<{ size: string; price: number | ""; stock: number | ""; sold: number }[]>([
+    { size: "S", price: 0, stock: "", sold: 0 },
+    { size: "M", price: 0, stock: "", sold: 0 },
+    { size: "L", price: 0, stock: "", sold: 0 },
+    { size: "XL", price: 0, stock: "", sold: 0 },
+    { size: "2XL", price: 0, stock: "", sold: 0 }
   ]);
 
   const fetchProducts = async (status: string) => {
@@ -86,7 +87,7 @@ export default function ProductsPage() {
   };
 
   const addVariant = () => {
-    setVariants([...variants, { size: "", price: formData.basePrice ? parseInt(formData.basePrice) : 0, stock: formData.baseStock ? parseInt(formData.baseStock) : "" }]);
+    setVariants([...variants, { size: "", price: formData.basePrice ? parseInt(formData.basePrice) : 0, stock: formData.baseStock ? parseInt(formData.baseStock) : "", sold: 0 }]);
   };
 
   const removeVariant = (index: number) => {
@@ -117,9 +118,10 @@ export default function ProductsPage() {
     const mappedVariants = product.variants.map(v => ({
       size: v.size,
       price: v.price as number | "",
-      stock: (v.stock === null || v.stock === undefined) ? "" : v.stock // Handle null/undefined as ""
+      stock: (v.stock === null || v.stock === undefined) ? "" : v.stock, // Handle null/undefined as ""
+      sold: (v as any).sold || 0
     }));
-    setVariants(mappedVariants.length > 0 ? mappedVariants : [{ size: "F", price: 0, stock: "" }]);
+    setVariants(mappedVariants.length > 0 ? mappedVariants : [{ size: "F", price: 0, stock: "", sold: 0 }]);
     setIsOpen(true);
   };
 
@@ -127,11 +129,11 @@ export default function ProductsPage() {
     setEditingId(null);
     setFormData({ name: "", keyword: "", basePrice: "", baseStock: "", description: "" });
     setVariants([
-      { size: "S", price: 0, stock: "" },
-      { size: "M", price: 0, stock: "" },
-      { size: "L", price: 0, stock: "" },
-      { size: "XL", price: 0, stock: "" },
-      { size: "2XL", price: 0, stock: "" }
+      { size: "S", price: 0, stock: "", sold: 0 },
+      { size: "M", price: 0, stock: "", sold: 0 },
+      { size: "L", price: 0, stock: "", sold: 0 },
+      { size: "XL", price: 0, stock: "", sold: 0 },
+      { size: "2XL", price: 0, stock: "", sold: 0 }
     ]);
     setIsOpen(true);
   };
@@ -224,8 +226,9 @@ export default function ProductsPage() {
         variants: finalVariants.length > 0 ? finalVariants.map(v => ({
           ...v,
           price: v.price === "" ? 0 : v.price,
-          stock: v.stock === "" ? null : v.stock // Convert "" to null for backend
-        })) : [{ size: "F", price: formData.basePrice ? parseInt(formData.basePrice) || 0 : 0, stock: null }],
+          stock: v.stock === "" ? null : v.stock, // Convert "" to null for backend
+          sold: v.sold
+        })) : [{ size: "F", price: formData.basePrice ? parseInt(formData.basePrice) || 0 : 0, stock: null, sold: 0 }],
         imageUrl: "",
       };
 
@@ -261,7 +264,7 @@ export default function ProductsPage() {
       fetchProducts(activeTab);
       setEditingId(null);
       setFormData({ name: "", keyword: "", basePrice: "", baseStock: "", description: "" });
-      setVariants([{ size: "F", price: 0, stock: "" }]);
+      setVariants([{ size: "F", price: 0, stock: "", sold: 0 }]);
     } catch (error) {
       toast.error(editingId ? "更新失敗" : "新增失敗");
     }
@@ -428,6 +431,8 @@ export default function ProductsPage() {
               <TableHead>代號</TableHead>
               <TableHead>名稱</TableHead>
               <TableHead>價格區間</TableHead>
+              <TableHead>庫存</TableHead>
+              <TableHead>已售出</TableHead>
               <TableHead>尺寸</TableHead>
               <TableHead className="w-[100px] text-right">動作</TableHead>
             </TableRow>
@@ -435,7 +440,7 @@ export default function ProductsPage() {
           <TableBody>
             {products.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                   {activeTab === "ACTIVE" ? "沒有目前商品。" : "沒有歷史商品。"}
                 </TableCell>
               </TableRow>
@@ -446,6 +451,22 @@ export default function ProductsPage() {
                 const maxPrice = prices.length ? Math.max(...prices) : 0;
                 const priceDisplay = minPrice === maxPrice ? `$${minPrice}` : `$${minPrice} ~ $${maxPrice}`;
                 const sizesDisplay = product.variants?.map(v => v.size).join(", ");
+
+                // Calculate stock display
+                let stockDisplay = "";
+                const hasInfinite = product.variants.some(v => v.stock === null || v.stock === undefined);
+                if (hasInfinite && product.variants.length === 1) {
+                  stockDisplay = "無限";
+                } else if (hasInfinite) {
+                  stockDisplay = "部份無限";
+                } else {
+                  const total = product.variants.reduce((acc, v) => acc + (v.stock || 0), 0);
+                  stockDisplay = total.toString();
+                }
+
+                // Calculate sold
+                const totalSold = product.variants.reduce((acc, v) => acc + ((v as any).sold || 0), 0);
+
 
                 return (
                   <TableRow key={product.id}>
@@ -461,6 +482,8 @@ export default function ProductsPage() {
                     <TableCell className="font-mono">{product.keyword}</TableCell>
                     <TableCell>{product.name}</TableCell>
                     <TableCell>{priceDisplay}</TableCell>
+                    <TableCell>{stockDisplay}</TableCell>
+                    <TableCell>{totalSold}</TableCell>
                     <TableCell>{sizesDisplay}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
