@@ -20,42 +20,68 @@ export async function GET(req: NextRequest) {
       user: true,
       product: true,
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [
+      { user: { name: "asc" } },
+      { createdAt: "desc" }
+    ],
   });
 
   // Generate CSV Header
   const csvHeader = [
-    "Order ID",
-    "Date",
-    "User Name",
-    "Line ID",
-    "Product Keyword",
-    "Product Name",
-    "Size",
-    "Quantity",
-    "Price",
-    "Total",
-    "Status"
+    "訂單日期",
+    "訂購平台",
+    "訂購人",
+    "品牌",
+    "編號",
+    "訂購品項",
+    "尺寸",
+    "件數",
+    "售價",
+    "抽獎編號",
+    "總金額",
+    "庫存",
+    "寄貨方式",
+    "付款方式",
+    "已到貨",
+    "已出貨",
+    "已叫貨",
+    "已入帳",
+    "備註"
   ].join(",");
 
   // Generate CSV Rows
   const csvRows = orders.map(order => {
+    const date = new Date(order.createdAt).toISOString().split('T')[0].replace(/-/g, '/');
+    const unitPrice = order.quantity > 0 ? Math.round(order.totalAmount / order.quantity) : 0;
+
+    // Status mapping for note or bool columns if needed
+    // Currently defaulting bools to FALSE
+
     return [
-      order.id,
-      order.createdAt.toISOString().split('T')[0],
-      `"${order.user.name || 'Unknown'}"`,
-      order.user.lineId,
+      date,
+      "官方賴", // Platform
+      `"${order.user.name || ''}"`,
+      "", // Brand
       order.product.keyword,
       `"${order.product.name}"`,
       order.size || "F",
       order.quantity,
-      order.quantity > 0 ? Math.round(order.totalAmount / order.quantity) : 0,
-      order.totalAmount,
-      order.status
+      unitPrice,
+      "", // Lottery
+      order.totalAmount, // Total
+      "", // Stock
+      "", // Shipping Method
+      "", // Payment Method
+      "FALSE", // Arrived
+      "FALSE", // Shipped
+      "FALSE", // Ordered
+      "FALSE", // Paid
+      `"${order.status === 'CANCELLED' ? (order.deleteReason || '取消') : order.status}"` // Note
     ].join(",");
   });
 
-  const csvContent = [csvHeader, ...csvRows].join("\n");
+  // Add BOM for Excel compatibility
+  const csvContent = "\uFEFF" + [csvHeader, ...csvRows].join("\n");
 
   // Return as downloadable file
   return new NextResponse(csvContent, {
