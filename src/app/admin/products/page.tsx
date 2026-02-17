@@ -28,7 +28,7 @@ import { cn, formatDate } from "@/lib/utils";
 interface ProductVariant {
   size: string;
   price: number | "";
-  stock: number;
+  stock: number | ""; // Allow empty string for infinite
 }
 
 interface Product {
@@ -51,14 +51,15 @@ export default function ProductsPage() {
     name: "",
     keyword: "",
     basePrice: "", // Helper to auto-fill variant prices
+    baseStock: "", // Helper to auto-fill variant stock
     description: "",
   });
-  const [variants, setVariants] = useState<{ size: string; price: number | "" }[]>([
-    { size: "S", price: 0 },
-    { size: "M", price: 0 },
-    { size: "L", price: 0 },
-    { size: "XL", price: 0 },
-    { size: "2XL", price: 0 }
+  const [variants, setVariants] = useState<{ size: string; price: number | ""; stock: number | "" }[]>([
+    { size: "S", price: 0, stock: "" },
+    { size: "M", price: 0, stock: "" },
+    { size: "L", price: 0, stock: "" },
+    { size: "XL", price: 0, stock: "" },
+    { size: "2XL", price: 0, stock: "" }
   ]);
 
   const fetchProducts = async (status: string) => {
@@ -78,18 +79,26 @@ export default function ProductsPage() {
     setVariants(prev => prev.map(v => ({ ...v, price })));
   };
 
+  const handleBaseStockChange = (val: string) => {
+    setFormData({ ...formData, baseStock: val });
+    const stock = val === "" ? "" : (parseInt(val) || 0);
+    setVariants(prev => prev.map(v => ({ ...v, stock })));
+  };
+
   const addVariant = () => {
-    setVariants([...variants, { size: "", price: formData.basePrice ? parseInt(formData.basePrice) : 0 }]);
+    setVariants([...variants, { size: "", price: formData.basePrice ? parseInt(formData.basePrice) : 0, stock: formData.baseStock ? parseInt(formData.baseStock) : "" }]);
   };
 
   const removeVariant = (index: number) => {
     setVariants(variants.filter((_, i) => i !== index));
   };
 
-  const updateVariant = (index: number, field: "size" | "price", value: string) => {
+  const updateVariant = (index: number, field: "size" | "price" | "stock", value: string) => {
     const newVariants = [...variants];
     if (field === "price") {
       newVariants[index].price = value === "" ? "" : (parseInt(value) || 0);
+    } else if (field === "stock") {
+      newVariants[index].stock = value === "" ? "" : (parseInt(value) || 0);
     } else {
       newVariants[index].size = value;
     }
@@ -103,21 +112,26 @@ export default function ProductsPage() {
       keyword: product.keyword,
       description: "",
       basePrice: "",
+      baseStock: "",
     });
-    const mappedVariants = product.variants.map(v => ({ size: v.size, price: v.price as number | "" }));
-    setVariants(mappedVariants.length > 0 ? mappedVariants : [{ size: "F", price: 0 }]);
+    const mappedVariants = product.variants.map(v => ({
+      size: v.size,
+      price: v.price as number | "",
+      stock: (v.stock === null || v.stock === undefined) ? "" : v.stock // Handle null/undefined as ""
+    }));
+    setVariants(mappedVariants.length > 0 ? mappedVariants : [{ size: "F", price: 0, stock: "" }]);
     setIsOpen(true);
   };
 
   const handleAddClick = () => {
     setEditingId(null);
-    setFormData({ name: "", keyword: "", basePrice: "", description: "" });
+    setFormData({ name: "", keyword: "", basePrice: "", baseStock: "", description: "" });
     setVariants([
-      { size: "S", price: 0 },
-      { size: "M", price: 0 },
-      { size: "L", price: 0 },
-      { size: "XL", price: 0 },
-      { size: "2XL", price: 0 }
+      { size: "S", price: 0, stock: "" },
+      { size: "M", price: 0, stock: "" },
+      { size: "L", price: 0, stock: "" },
+      { size: "XL", price: 0, stock: "" },
+      { size: "2XL", price: 0, stock: "" }
     ]);
     setIsOpen(true);
   };
@@ -206,8 +220,12 @@ export default function ProductsPage() {
         name: formData.name,
         keyword: formData.keyword,
         description: formData.description,
-        // If no variants defined (all filtered out), default to F with base price
-        variants: finalVariants.length > 0 ? finalVariants.map(v => ({ ...v, price: v.price === "" ? 0 : v.price })) : [{ size: "F", price: formData.basePrice ? parseInt(formData.basePrice) || 0 : 0 }],
+        // If no variants defined (all filtered out), default to F with base price and infinite stock
+        variants: finalVariants.length > 0 ? finalVariants.map(v => ({
+          ...v,
+          price: v.price === "" ? 0 : v.price,
+          stock: v.stock === "" ? null : v.stock // Convert "" to null for backend
+        })) : [{ size: "F", price: formData.basePrice ? parseInt(formData.basePrice) || 0 : 0, stock: null }],
         imageUrl: "",
       };
 
@@ -242,8 +260,8 @@ export default function ProductsPage() {
       setIsOpen(false);
       fetchProducts(activeTab);
       setEditingId(null);
-      setFormData({ name: "", keyword: "", basePrice: "", description: "" });
-      setVariants([{ size: "F", price: 0 }]);
+      setFormData({ name: "", keyword: "", basePrice: "", baseStock: "", description: "" });
+      setVariants([{ size: "F", price: 0, stock: "" }]);
     } catch (error) {
       toast.error(editingId ? "更新失敗" : "新增失敗");
     }
@@ -327,15 +345,27 @@ export default function ProductsPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <Label htmlFor="basePrice">基本價格 (預設)</Label>
-                    <Input
-                      id="basePrice"
-                      type="number"
-                      value={formData.basePrice}
-                      onChange={(e) => handleBasePriceChange(e.target.value)}
-                      placeholder="輸入後自動套用至所有尺寸"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="basePrice">基本價格 (預設)</Label>
+                      <Input
+                        id="basePrice"
+                        type="number"
+                        value={formData.basePrice}
+                        onChange={(e) => handleBasePriceChange(e.target.value)}
+                        placeholder="輸入後自動套用至所有尺寸"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="baseStock">基本庫存 (預設)</Label>
+                      <Input
+                        id="baseStock"
+                        type="number"
+                        value={formData.baseStock}
+                        onChange={(e) => handleBaseStockChange(e.target.value)}
+                        placeholder="留空 = 無限"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -356,6 +386,13 @@ export default function ProductsPage() {
                           onChange={(e) => updateVariant(index, "price", e.target.value)}
                           className="w-24"
                           required
+                        />
+                        <Input
+                          type="number"
+                          placeholder="庫存(空=無限)"
+                          value={variant.stock}
+                          onChange={(e) => updateVariant(index, "stock", e.target.value)}
+                          className="w-32"
                         />
                         <Button type="button" variant="ghost" size="icon" onClick={() => removeVariant(index)}>
                           <Minus className="h-4 w-4" />

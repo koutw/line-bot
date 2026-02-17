@@ -51,6 +51,7 @@ interface Order {
   user: { name: string | null; lineId: string };
   product: { name: string; keyword: string };
   quantity: number;
+  size: string | null;
   totalAmount: number;
   status: string;
   deleteReason?: string;
@@ -459,6 +460,7 @@ export default function OrdersPage() {
               </TableHead>
               <TableHead>客戶</TableHead>
               <TableHead>商品</TableHead>
+              <TableHead>尺寸</TableHead>
               <TableHead className="cursor-pointer" onClick={() => handleSort("quantity")}>
                 數量 {sortConfig.key === "quantity" && (sortConfig.direction === "asc" ? "↑" : "↓")}
               </TableHead>
@@ -472,7 +474,7 @@ export default function OrdersPage() {
           <TableBody>
             {orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                   {activeTab === "CURRENT" ? "目前沒有處理中的訂單。" : "沒有歷史訂單。"}
                 </TableCell>
               </TableRow>
@@ -502,8 +504,14 @@ export default function OrdersPage() {
                       <span>{order.product.name}</span>
                     </div>
                   </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="font-mono">
+                      {order.size || "F"}
+                    </Badge>
+                  </TableCell>
                   <TableCell>{order.quantity}</TableCell>
                   <TableCell>${order.totalAmount}</TableCell>
+
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       {getStatusBadge(order.status)}

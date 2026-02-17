@@ -69,10 +69,10 @@ export async function POST(req: NextRequest) {
             let totalAmount = 0;
             const orderList = orders.map((order, index) => {
               totalAmount += order.totalAmount;
-              return `${index + 1}. ${order.product.name} - ${order.size} x ${order.quantity} ($${order.totalAmount})`;
+              return `${index + 1}. ${order.product.keyword} 🏷️ ${order.product.name} - ${order.size} x ${order.quantity} ($${order.totalAmount})`;
             }).join("\n");
 
-            const replyText = `🛍️ 目前訂單明細：\n\n${orderList}\n\n💰 總金額：$${totalAmount}`;
+            const replyText = `🛍️ 目前訂單明細：\n\n${orderList}\n\n💰 總金額：$${totalAmount}\n\n連線結束後，會再依序傳送下單連結唷！感謝您的購買🫶🏻`;
 
             await client.replyMessage({
               replyToken: event.replyToken,
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
               // Parse line by line
               for (const line of lines) {
                 if (line.includes("代號：") || line.includes("代號:")) {
-                  keyword = line.split(/：|:/)[1].trim();
+                  keyword = line.split(/：|:/)[1].trim().toUpperCase();
                 } else if (line.includes("商品名：") || line.includes("商品名:")) {
                   name = line.split(/：|:/)[1].trim();
                 } else if (line.includes("size：") || line.includes("size:")) {
@@ -227,7 +227,8 @@ export async function POST(req: NextRequest) {
 
             for (const line of lines) {
               if (line.includes("代號：") || line.includes("代號:")) {
-                keyword = line.split(/：|:/)[1].trim();
+                keyword = line.split(/：|:/)[1].trim().toUpperCase();
+
               } else if (line.includes("數量：") || line.includes("數量:")) {
                 const q = line.split(/：|:/)[1].trim();
                 quantity = parseInt(q, 10) || 1;
@@ -254,7 +255,7 @@ export async function POST(req: NextRequest) {
                 return;
               }
 
-              // Find matching variant
+              // 1. Find matched variant
               // Case-insensitive comparison can be tricky, let's try exact first then case-insensitive
               const variant = product.variants.find(v => v.size === size) ||
                 product.variants.find(v => v.size.toLowerCase() === size.toLowerCase());
@@ -263,9 +264,34 @@ export async function POST(req: NextRequest) {
                 const availableSizes = product.variants.map(v => v.size).join(", ");
                 await client.replyMessage({
                   replyToken: event.replyToken,
+
                   messages: [{ type: "text", text: `⚠️ 找不到尺寸 "${size}"。\n可用尺寸: ${availableSizes}` }]
                 });
                 return;
+              }
+
+              // 2. STOCK CHECK
+              if (variant.stock !== null) {
+                // Calculate current sold count
+                const currentOrders = await prisma.order.aggregate({
+                  _sum: { quantity: true },
+                  where: {
+                    productId: product.id,
+                    size: variant.size,
+                    status: { in: ["CONFIRMED", "PURCHASED"] } // Exclude CANCELLED/ARCHIVED? usually archived are still sold?
+                    // status usually: CONFIRMED(active), PURCHASED(paid?), CANCELLED, OUT_OF_STOCK
+                  }
+                });
+
+                const soldCount = currentOrders._sum.quantity || 0;
+
+                if (soldCount + quantity > variant.stock) {
+                  await client.replyMessage({
+                    replyToken: event.replyToken,
+                    messages: [{ type: "text", text: `不好意思，本連線商品已完售🙇🏻‍♀️\n歡迎到群組記事本逛逛其他選品！` }]
+                  });
+                  return;
+                }
               }
 
               // Find/Create User

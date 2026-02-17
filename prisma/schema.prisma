@@ -46,7 +46,7 @@ model ProductVariant {
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   size      String
   price     Int
-  stock     Int     @default(0)
+  stock     Int?
 
   @@unique([productId, size])
 }

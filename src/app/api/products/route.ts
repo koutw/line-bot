@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
         create: variants.map((v: any) => ({
           size: v.size,
           price: Number(v.price),
-          stock: Number(v.stock) || 0,
+          stock: (v.stock === null || v.stock === undefined || v.stock === "") ? undefined : Number(v.stock),
         })),
       };
     }
@@ -132,7 +132,7 @@ export async function PATCH(req: NextRequest) {
             productId: id,
             size: v.size,
             price: Number(v.price),
-            stock: 0,
+            stock: (v.stock === null || v.stock === undefined || v.stock === "") ? undefined : Number(v.stock),
           })),
         });
       }

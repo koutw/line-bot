@@ -1,8 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Package, ShoppingCart, Users, PanelLeft, Settings } from "lucide-react";
+import { PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { adminNavItems } from "@/config/nav";
 
 export default function AdminLayout({
   children,
@@ -21,34 +22,16 @@ export default function AdminLayout({
           </Link>
         </div>
         <nav className="flex flex-col gap-2 p-4 text-sm font-medium">
-          <Link
-            href="/admin/products"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
-          >
-            <Package className="h-4 w-4" />
-            商品管理
-          </Link>
-          <Link
-            href="/admin/orders"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
-          >
-            <ShoppingCart className="h-4 w-4" />
-            訂單管理
-          </Link>
-          <Link
-            href="/admin/customers"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
-          >
-            <Users className="h-4 w-4" />
-            會員管理
-          </Link>
-          <Link
-            href="/admin/settings"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
-          >
-            <Settings className="h-4 w-4" />
-            系統設定
-          </Link>
+          {adminNavItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
+            >
+              <item.icon className="h-4 w-4" />
+              {item.title}
+            </Link>
+          ))}
         </nav>
       </aside>
       <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-64 w-full">
@@ -61,6 +44,10 @@ export default function AdminLayout({
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="sm:max-w-xs">
+              <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+              <SheetDescription className="sr-only">
+                Navigation menu for the admin panel.
+              </SheetDescription>
               <nav className="grid gap-6 text-lg font-medium">
                 <Link
                   href="/admin"
@@ -71,27 +58,16 @@ export default function AdminLayout({
                   </div>
                   <span className="text-base">MyBoo｜韓國寵物選品店</span>
                 </Link>
-                <Link
-                  href="/admin/products"
-                  className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground"
-                >
-                  <Package className="h-5 w-5" />
-                  商品管理
-                </Link>
-                <Link
-                  href="/admin/orders"
-                  className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground"
-                >
-                  <ShoppingCart className="h-5 w-5" />
-                  訂單管理
-                </Link>
-                <Link
-                  href="/admin/customers"
-                  className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground"
-                >
-                  <Users className="h-5 w-5" />
-                  會員管理
-                </Link>
+                {adminNavItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {item.title}
+                  </Link>
+                ))}
               </nav>
             </SheetContent>
           </Sheet>
@@ -102,3 +78,4 @@ export default function AdminLayout({
     </div>
   );
 }
+
