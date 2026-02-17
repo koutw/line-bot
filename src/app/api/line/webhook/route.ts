@@ -280,28 +280,32 @@ export async function POST(req: NextRequest) {
                 return;
               }
 
-              // 2. STOCK CHECK
-              if (variant.stock !== null) {
-                // Calculate current sold count
-                const currentOrders = await prisma.order.aggregate({
-                  _sum: { quantity: true },
-                  where: {
-                    productId: product.id,
-                    size: variant.size,
-                    status: { in: ["CONFIRMED", "PURCHASED"] } // Exclude CANCELLED/ARCHIVED? usually archived are still sold?
-                    // status usually: CONFIRMED(active), PURCHASED(paid?), CANCELLED, OUT_OF_STOCK
-                  }
-                });
+              // 2. STOCK CHECK (ATOMIC) - RE-APPLIED
+              try {
+                // Use raw query for atomicity to prevent race conditions
+                // Increment sold count ONLY if stock is sufficient (or null/infinite)
+                const result = await prisma.$executeRaw`
+                  UPDATE "ProductVariant"
+                  SET "sold" = "sold" + ${quantity}
+                  WHERE "id" = ${variant.id}
+                    AND ("stock" IS NULL OR "sold" + ${quantity} <= "stock")
+                `;
 
-                const soldCount = currentOrders._sum.quantity || 0;
-
-                if (soldCount + quantity > variant.stock) {
+                // result is the number of affected rows
+                if (result === 0) {
                   await client.replyMessage({
                     replyToken: event.replyToken,
                     messages: [{ type: "text", text: `不好意思，本連線商品已完售🙇🏻‍♀️\n歡迎到群組記事本逛逛其他選品！` }]
                   });
                   return;
                 }
+              } catch (e) {
+                console.error("Stock update failed", e);
+                await client.replyMessage({
+                  replyToken: event.replyToken,
+                  messages: [{ type: "text", text: "系統忙碌中，請稍後再試。" }]
+                });
+                return;
               }
 
               // Find/Create User
