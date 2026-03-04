@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { PanelLeft } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { adminNavItems } from "@/config/nav";
@@ -10,6 +14,7 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   return (
     <div className="flex min-h-screen w-full bg-muted/40">
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-64 flex-col border-r bg-background sm:flex">
@@ -26,7 +31,12 @@ export default function AdminLayout({
             <Link
               key={item.href}
               href={item.href}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 transition-all",
+                pathname === item.href
+                  ? "bg-muted text-primary font-medium"
+                  : "text-muted-foreground hover:text-primary"
+              )}
             >
               <item.icon className="h-4 w-4" />
               {item.title}
@@ -62,7 +72,12 @@ export default function AdminLayout({
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground"
+                    className={cn(
+                      "flex items-center gap-4 px-2.5 transition-colors",
+                      pathname === item.href
+                        ? "text-foreground font-medium"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
                   >
                     <item.icon className="h-5 w-5" />
                     {item.title}

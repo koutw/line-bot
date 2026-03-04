@@ -289,7 +289,6 @@ export default function OrdersPage() {
     if (dateRange.start) params.append("startDate", dateRange.start);
     if (dateRange.end) params.append("endDate", dateRange.end);
     if (exportStatuses.length > 0) params.append("status", exportStatuses.join(","));
-    if (exportStatuses.length > 0) params.append("status", exportStatuses.join(","));
     if (filterKeywords.length > 0) params.append("keyword", filterKeywords.join(","));
 
     window.open(`/api/orders/export?${params.toString()}`, "_blank");
@@ -445,7 +444,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="border rounded-md">
+      <div className="border rounded-md overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -562,7 +561,7 @@ export default function OrdersPage() {
       </div>
 
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>取消訂單確認</DialogTitle>
             <DialogDescription>

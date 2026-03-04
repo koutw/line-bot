@@ -317,11 +317,11 @@ export default function ProductsPage() {
                   <Plus className="mr-2 h-4 w-4" /> 新增商品
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="max-w-2xl max-h-[85dvh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{editingId ? "編輯商品" : "新增商品"}</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4 pb-12 sm:pb-0">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="name">商品名稱</Label>

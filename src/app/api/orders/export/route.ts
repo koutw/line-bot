@@ -5,13 +5,18 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
+  const status = searchParams.get("status");
 
   const where: any = {};
   if (startDate && endDate) {
     where.createdAt = {
       gte: new Date(startDate),
-      lte: new Date(endDate),
+      lte: new Date(endDate + "T23:59:59"),
     };
+  }
+  if (status) {
+    const statuses = status.split(",");
+    where.status = statuses.length > 1 ? { in: statuses } : statuses[0];
   }
 
   const orders = await prisma.order.findMany({

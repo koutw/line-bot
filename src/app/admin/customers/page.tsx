@@ -25,7 +25,7 @@ export default function CustomersPage() {
   const fetchCustomers = async () => {
     const res = await fetch("/api/customers");
     const data = await res.json();
-    setCustomers(data);
+    setCustomers(Array.isArray(data) ? data : []);
   };
 
   useEffect(() => {
