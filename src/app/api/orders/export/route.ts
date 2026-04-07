@@ -23,7 +23,9 @@ export async function GET(req: NextRequest) {
     where,
     include: {
       user: true,
-      product: true,
+      product: {
+        include: { variants: true }
+      },
     },
     orderBy: [
       { user: { name: "asc" } },
@@ -31,7 +33,6 @@ export async function GET(req: NextRequest) {
     ],
   });
 
-  // Generate CSV Header
   const csvHeader = [
     "訂單日期",
     "訂購平台",
@@ -42,8 +43,10 @@ export async function GET(req: NextRequest) {
     "尺寸",
     "件數",
     "售價",
+    "單位成本",
     "抽獎編號",
     "總金額",
+    "淨利",
     "庫存",
     "寄貨方式",
     "付款方式",
@@ -58,6 +61,11 @@ export async function GET(req: NextRequest) {
   const csvRows = orders.map(order => {
     const date = new Date(order.createdAt).toISOString().split('T')[0].replace(/-/g, '/');
     const unitPrice = order.quantity > 0 ? Math.round(order.totalAmount / order.quantity) : 0;
+    
+    // Find unit cost from product variants
+    const variant = order.product.variants.find(v => v.size === order.size) || order.product.variants[0];
+    const unitCost = variant?.cost || 0;
+    const profit = order.totalAmount - (unitCost * order.quantity);
 
     // Status mapping for note or bool columns if needed
     // Currently defaulting bools to FALSE
@@ -72,8 +80,10 @@ export async function GET(req: NextRequest) {
       order.size || "F",
       order.quantity,
       unitPrice,
+      unitCost,
       "", // Lottery
       order.totalAmount, // Total
+      profit, // Net Profit
       "", // Stock
       "", // Shipping Method
       "", // Payment Method

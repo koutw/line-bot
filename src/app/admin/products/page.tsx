@@ -28,6 +28,7 @@ import { cn, formatDate } from "@/lib/utils";
 interface ProductVariant {
   size: string;
   price: number | "";
+  cost: number | "";
   stock: number | ""; // Allow empty string for infinite
   sold: number;
 }
@@ -52,15 +53,16 @@ export default function ProductsPage() {
     name: "",
     keyword: "",
     basePrice: "", // Helper to auto-fill variant prices
+    baseCost: "", // Helper to auto-fill variant costs
     baseStock: "", // Helper to auto-fill variant stock
     description: "",
   });
-  const [variants, setVariants] = useState<{ size: string; price: number | ""; stock: number | ""; sold: number }[]>([
-    { size: "S", price: 0, stock: "", sold: 0 },
-    { size: "M", price: 0, stock: "", sold: 0 },
-    { size: "L", price: 0, stock: "", sold: 0 },
-    { size: "XL", price: 0, stock: "", sold: 0 },
-    { size: "2XL", price: 0, stock: "", sold: 0 }
+  const [variants, setVariants] = useState<{ size: string; price: number | ""; cost: number | ""; stock: number | ""; sold: number }[]>([
+    { size: "S", price: 0, cost: "", stock: "", sold: 0 },
+    { size: "M", price: 0, cost: "", stock: "", sold: 0 },
+    { size: "L", price: 0, cost: "", stock: "", sold: 0 },
+    { size: "XL", price: 0, cost: "", stock: "", sold: 0 },
+    { size: "2XL", price: 0, cost: "", stock: "", sold: 0 }
   ]);
 
   const fetchProducts = async (status: string) => {
@@ -80,6 +82,12 @@ export default function ProductsPage() {
     setVariants(prev => prev.map(v => ({ ...v, price })));
   };
 
+  const handleBaseCostChange = (val: string) => {
+    setFormData({ ...formData, baseCost: val });
+    const cost = val === "" ? "" : (parseInt(val) || 0);
+    setVariants(prev => prev.map(v => ({ ...v, cost })));
+  };
+
   const handleBaseStockChange = (val: string) => {
     setFormData({ ...formData, baseStock: val });
     const stock = val === "" ? "" : (parseInt(val) || 0);
@@ -87,17 +95,19 @@ export default function ProductsPage() {
   };
 
   const addVariant = () => {
-    setVariants([...variants, { size: "", price: formData.basePrice ? parseInt(formData.basePrice) : 0, stock: formData.baseStock ? parseInt(formData.baseStock) : "", sold: 0 }]);
+    setVariants([...variants, { size: "", price: formData.basePrice ? parseInt(formData.basePrice) : 0, cost: formData.baseCost ? parseInt(formData.baseCost) : "", stock: formData.baseStock ? parseInt(formData.baseStock) : "", sold: 0 }]);
   };
 
   const removeVariant = (index: number) => {
     setVariants(variants.filter((_, i) => i !== index));
   };
 
-  const updateVariant = (index: number, field: "size" | "price" | "stock", value: string) => {
+  const updateVariant = (index: number, field: "size" | "price" | "stock" | "cost", value: string) => {
     const newVariants = [...variants];
     if (field === "price") {
       newVariants[index].price = value === "" ? "" : (parseInt(value) || 0);
+    } else if (field === "cost") {
+      newVariants[index].cost = value === "" ? "" : (parseInt(value) || 0);
     } else if (field === "stock") {
       newVariants[index].stock = value === "" ? "" : (parseInt(value) || 0);
     } else {
@@ -113,15 +123,17 @@ export default function ProductsPage() {
       keyword: product.keyword,
       description: (product as any).description || "",
       basePrice: "",
+      baseCost: "",
       baseStock: "",
     });
     const mappedVariants = product.variants.map(v => ({
       size: v.size,
       price: v.price as number | "",
+      cost: (v as any).cost === null || (v as any).cost === undefined ? "" : (v as any).cost,
       stock: (v.stock === null || v.stock === undefined) ? "" : v.stock, // Handle null/undefined as ""
       sold: (v as any).sold || 0
     }));
-    setVariants(mappedVariants.length > 0 ? mappedVariants : [{ size: "F", price: 0, stock: "", sold: 0 }]);
+    setVariants(mappedVariants.length > 0 ? mappedVariants : [{ size: "F", price: 0, cost: "", stock: "", sold: 0 }]);
     setIsOpen(true);
   };
 
@@ -132,27 +144,29 @@ export default function ProductsPage() {
       keyword: `${product.keyword}-COPY`,
       description: (product as any).description || "",
       basePrice: "",
+      baseCost: "",
       baseStock: "",
     });
     const mappedVariants = product.variants.map(v => ({
       size: v.size,
       price: v.price as number | "",
+      cost: (v as any).cost === null || (v as any).cost === undefined ? "" : (v as any).cost,
       stock: (v.stock === null || v.stock === undefined) ? "" : v.stock,
       sold: 0
     }));
-    setVariants(mappedVariants.length > 0 ? mappedVariants : [{ size: "F", price: 0, stock: "", sold: 0 }]);
+    setVariants(mappedVariants.length > 0 ? mappedVariants : [{ size: "F", price: 0, cost: "", stock: "", sold: 0 }]);
     setIsOpen(true);
   };
 
   const handleAddClick = () => {
     setEditingId(null);
-    setFormData({ name: "", keyword: "", basePrice: "", baseStock: "", description: "" });
+    setFormData({ name: "", keyword: "", basePrice: "", baseCost: "", baseStock: "", description: "" });
     setVariants([
-      { size: "S", price: 0, stock: "", sold: 0 },
-      { size: "M", price: 0, stock: "", sold: 0 },
-      { size: "L", price: 0, stock: "", sold: 0 },
-      { size: "XL", price: 0, stock: "", sold: 0 },
-      { size: "2XL", price: 0, stock: "", sold: 0 }
+      { size: "S", price: 0, cost: "", stock: "", sold: 0 },
+      { size: "M", price: 0, cost: "", stock: "", sold: 0 },
+      { size: "L", price: 0, cost: "", stock: "", sold: 0 },
+      { size: "XL", price: 0, cost: "", stock: "", sold: 0 },
+      { size: "2XL", price: 0, cost: "", stock: "", sold: 0 }
     ]);
     setIsOpen(true);
   };
@@ -245,9 +259,10 @@ export default function ProductsPage() {
         variants: finalVariants.length > 0 ? finalVariants.map(v => ({
           ...v,
           price: v.price === "" ? 0 : v.price,
+          cost: v.cost === "" ? null : v.cost,
           stock: v.stock === "" ? null : v.stock, // Convert "" to null for backend
           sold: v.sold
-        })) : [{ size: "F", price: formData.basePrice ? parseInt(formData.basePrice) || 0 : 0, stock: null, sold: 0 }],
+        })) : [{ size: "F", price: formData.basePrice ? parseInt(formData.basePrice) || 0 : 0, cost: formData.baseCost ? parseInt(formData.baseCost) || null : null, stock: null, sold: 0 }],
         imageUrl: "",
       };
 
@@ -272,7 +287,7 @@ export default function ProductsPage() {
 
       if (!res.ok) {
         if (res.status === 409) {
-          toast.error(data.error); // Duplicate keyword error
+          window.alert("您設置的編號已重複\n請重新輸入");
           return;
         }
         throw new Error("Failed");
@@ -282,8 +297,8 @@ export default function ProductsPage() {
       setIsOpen(false);
       fetchProducts(activeTab);
       setEditingId(null);
-      setFormData({ name: "", keyword: "", basePrice: "", baseStock: "", description: "" });
-      setVariants([{ size: "F", price: 0, stock: "", sold: 0 }]);
+      setFormData({ name: "", keyword: "", basePrice: "", baseCost: "", baseStock: "", description: "" });
+      setVariants([{ size: "F", price: 0, cost: "", stock: "", sold: 0 }]);
     } catch (error) {
       toast.error(editingId ? "更新失敗" : "新增失敗");
     }
@@ -354,7 +369,7 @@ export default function ProductsPage() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="keyword">代號 (訂單觸發詞)</Label>
+                      <Label htmlFor="keyword">商品編號 (訂單觸發詞)</Label>
                       <Input
                         id="keyword"
                         value={formData.keyword}
@@ -367,7 +382,7 @@ export default function ProductsPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div>
                       <Label htmlFor="basePrice">基本價格 (預設)</Label>
                       <Input
@@ -375,7 +390,17 @@ export default function ProductsPage() {
                         type="number"
                         value={formData.basePrice}
                         onChange={(e) => handleBasePriceChange(e.target.value)}
-                        placeholder="輸入後自動套用至所有尺寸"
+                        placeholder="自動套用至所有尺寸"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="baseCost">基本成本 (預設)</Label>
+                      <Input
+                        id="baseCost"
+                        type="number"
+                        value={formData.baseCost}
+                        onChange={(e) => handleBaseCostChange(e.target.value)}
+                        placeholder="自動套用至所有尺寸"
                       />
                     </div>
                     <div>
@@ -395,10 +420,10 @@ export default function ProductsPage() {
                     {variants.map((variant, index) => (
                       <div key={index} className="flex items-center gap-2">
                         <Input
-                          placeholder="尺寸 (e.g. S, M)"
+                          placeholder="尺寸 (e.g. S)"
                           value={variant.size}
                           onChange={(e) => updateVariant(index, "size", e.target.value)}
-                          className="flex-1"
+                          className="w-24 flex-none"
                           required
                         />
                         <Input
@@ -406,15 +431,22 @@ export default function ProductsPage() {
                           placeholder="價格"
                           value={variant.price}
                           onChange={(e) => updateVariant(index, "price", e.target.value)}
-                          className="w-24"
+                          className="w-24 flex-none"
                           required
+                        />
+                        <Input
+                          type="number"
+                          placeholder="成本(選填)"
+                          value={variant.cost}
+                          onChange={(e) => updateVariant(index, "cost", e.target.value)}
+                          className="w-24 flex-none"
                         />
                         <Input
                           type="number"
                           placeholder="庫存(空=無限)"
                           value={variant.stock}
                           onChange={(e) => updateVariant(index, "stock", e.target.value)}
-                          className="w-32"
+                          className="w-28 flex-none"
                         />
                         <Button type="button" variant="ghost" size="icon" onClick={() => removeVariant(index)}>
                           <Minus className="h-4 w-4" />
@@ -447,7 +479,7 @@ export default function ProductsPage() {
                 />
               </TableHead>
               <TableHead>建立日期</TableHead>
-              <TableHead>代號</TableHead>
+              <TableHead>商品編號</TableHead>
               <TableHead>名稱</TableHead>
               <TableHead>價格區間</TableHead>
               <TableHead>庫存</TableHead>

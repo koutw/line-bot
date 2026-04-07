@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
             } else {
               // Parse usage:
               // 連線商品
-              // 代號：N01
+              // 商品編號：N01
               // 商品名：adidas唐衣-紅
               // size：S:100, M:120, L:120
               // 商品描述：無
@@ -103,8 +103,8 @@ export async function POST(req: NextRequest) {
 
               // Parse line by line
               for (const line of lines) {
-                if (line.includes("代號：") || line.includes("代號:")) {
-                  keyword = line.split(/：|:/)[1].trim().toUpperCase();
+                if (line.includes("商品編號：") || line.includes("商品編號:") || line.includes("代號：") || line.includes("代號:")) {
+                  keyword = line.split(/：|:/)[1]?.trim().toUpperCase() || "";
                 } else if (line.includes("商品名：") || line.includes("商品名:")) {
                   name = line.split(/：|:/)[1].trim();
                 } else if (line.includes("size：") || line.includes("size:")) {
@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
 
                   // Reply
                   const variantDisplay = variantsData.map(v => `${v.size}($${v.price})`).join(", ");
-                  const replyText = `✅ 商品上架成功！\n${name} (${keyword})\n規格: ${variantDisplay}\n\n👇 發送以下文字下單:\n---------------\n代號：${keyword}\n數量：1\n尺寸：${variantsData[0]?.size || "F"}`;
+                  const replyText = `✅ 商品上架成功！\n${name} (${keyword})\n規格: ${variantDisplay}\n\n👇 發送以下文字下單:\n---------------\n商品編號：${keyword}\n數量：1\n尺寸：${variantsData[0]?.size || "F"}`;
 
                   await client.replyMessage({
                     replyToken: event.replyToken,
@@ -200,115 +200,50 @@ export async function POST(req: NextRequest) {
 
           // --- USER ORDERING ---
           // Template:
-          // 代號：N01
+          // 商品編號：N01
           // 數量：2
           // 尺寸：L
 
           // STRICT CHECK: Must contain Keyword AND Quantity. Size is optional (default F)
-          const hasKeyword = text.includes("代號：") || text.includes("代號:");
+          const hasKeyword = text.includes("商品編號：") || text.includes("商品編號:") || text.includes("代號：") || text.includes("代號:");
           const hasQuantity = text.includes("數量：") || text.includes("數量:");
-          // const hasSize = text.includes("尺寸：") || text.includes("尺寸:");
 
           if (hasKeyword && hasQuantity) {
 
             // 0. Check Global Switch
             const setting = await prisma.systemSetting.findUnique({ where: { key: "ordering_enabled" } });
-            // If setting value is "false", deny. Default to true if not set? Or default false?
-            // User requested "turn off", so imply it's usually on. Let's assume enabled unless explicitly "false".
             if (setting?.value === "false") {
-              // Silently ignore if ordering is disabled
               return;
             }
 
             const lines = text.split("\n");
-            let keyword = "";
-            let quantity = 1;
-            let size = "";
+            const parsedItems: { keyword: string, quantity: number, size: string }[] = [];
+            let currentItem: { keyword: string, quantity: number, size: string } | null = null;
 
             for (const line of lines) {
-              if (line.includes("代號：") || line.includes("代號:")) {
-                keyword = line.split(/：|:/)[1].trim().toUpperCase();
-
-              } else if (line.includes("數量：") || line.includes("數量:")) {
+              if (line.includes("商品編號：") || line.includes("商品編號:") || line.includes("代號：") || line.includes("代號:")) {
+                if (currentItem && currentItem.keyword) {
+                  parsedItems.push(currentItem);
+                }
+                const rawKeyword = line.split(/：|:/)[1]?.trim().toUpperCase() || "";
+                currentItem = {
+                  keyword: rawKeyword.split(/[\s(（]/)[0], // Remove extra text like "(橘色芬達)"
+                  quantity: 1,
+                  size: ""
+                };
+              } else if ((line.includes("數量：") || line.includes("數量:")) && currentItem) {
                 const q = line.split(/：|:/)[1].trim();
-                quantity = parseInt(q, 10) || 1;
-              } else if (line.includes("尺寸：") || line.includes("尺寸:")) {
-                size = line.split(/：|:/)[1].trim();
+                currentItem.quantity = parseInt(q, 10) || 1;
+              } else if ((line.includes("尺寸：") || line.includes("尺寸:")) && currentItem) {
+                currentItem.size = line.split(/：|:/)[1].trim();
               }
             }
+            if (currentItem && currentItem.keyword) {
+              parsedItems.push(currentItem);
+            }
 
-            if (keyword) {
-              // Find Product with Variants
-              const product = await prisma.product.findFirst({
-                where: { keyword: keyword, status: "ACTIVE" },
-                include: { variants: true }
-              });
-
-              if (!product) {
-                await client.replyMessage({
-                  replyToken: event.replyToken,
-
-                  messages: [{ type: "text", text: `❓ 找不到代號為 ${keyword} 的商品。` }]
-                });
-                return;
-              }
-
-              // Default size logic:
-              // 1. If user didn't specify size (or empty)
-              // 2. If product has exactly 1 variant -> Use that variant
-              // 3. Otherwise default to "F"
-              if (!size) {
-                if (product.variants.length === 1) {
-                  size = product.variants[0].size;
-                } else {
-                  size = "F";
-                }
-              }
-
-              // 1. Find matched variant
-              // Case-insensitive comparison can be tricky, let's try exact first then case-insensitive
-              const variant = product.variants.find(v => v.size === size) ||
-                product.variants.find(v => v.size.toLowerCase() === size.toLowerCase());
-
-              if (!variant) {
-                const availableSizes = product.variants.map(v => v.size).join(", ");
-                await client.replyMessage({
-                  replyToken: event.replyToken,
-
-                  messages: [{ type: "text", text: `⚠️ 找不到尺寸 "${size}"。\n可用尺寸: ${availableSizes}` }]
-                });
-                return;
-              }
-
-              // 2. STOCK CHECK (ATOMIC) - RE-APPLIED
-              try {
-                // Use raw query for atomicity to prevent race conditions
-                // Increment sold count ONLY if stock is sufficient (or null/infinite)
-                const result = await prisma.$executeRaw`
-                  UPDATE "ProductVariant"
-                  SET "sold" = "sold" + ${quantity}
-                  WHERE "id" = ${variant.id}
-                    AND ("stock" IS NULL OR "sold" + ${quantity} <= "stock")
-                `;
-
-                // result is the number of affected rows
-                if (result === 0) {
-                  await client.replyMessage({
-                    replyToken: event.replyToken,
-                    messages: [{ type: "text", text: `不好意思，本連線商品已完售🙇🏻‍♀️\n歡迎到群組記事本逛逛其他選品！` }]
-                  });
-                  return;
-                }
-              } catch (e) {
-                console.error("Stock update failed", e);
-                await client.replyMessage({
-                  replyToken: event.replyToken,
-                  messages: [{ type: "text", text: "系統忙碌中，請稍後再試。" }]
-                });
-                return;
-              }
-
-              // Find/Create User
+            if (parsedItems.length > 0) {
+              // Find/Create User ONCE
               let user = await prisma.user.findUnique({ where: { lineId: userId } });
               if (!user) {
                 user = await prisma.user.create({ data: { lineId: userId } });
@@ -321,35 +256,87 @@ export async function POST(req: NextRequest) {
                 } catch (e) { }
               }
 
-              // Create Order
-              await prisma.order.create({
-                data: {
-                  userId: user.id,
-                  productId: product.id,
-                  quantity: quantity,
-                  size: variant.size, // Store exact variant size string
-                  totalAmount: variant.price * quantity,
-                  status: "CONFIRMED"
+              let successText = "";
+              let failText = "";
+
+              for (const item of parsedItems) {
+                const { keyword, quantity } = item;
+                let { size } = item;
+
+                const product = await prisma.product.findFirst({
+                  where: { keyword: keyword, status: "ACTIVE" },
+                  include: { variants: true }
+                });
+
+                if (!product) {
+                  failText += `❓ 找不到商品編號為 ${keyword} 的商品。\n`;
+                  continue;
                 }
-              });
 
-              // Reply
-              await client.replyMessage({
-                replyToken: event.replyToken,
-                messages: [{
-                  type: "text", text: `✅ 訂單已確認！
+                if (!size) {
+                  if (product.variants.length === 1) {
+                    size = product.variants[0].size;
+                  } else {
+                    size = "F";
+                  }
+                }
 
-商品：${product.name}
-尺寸：${variant.size}
-數量：${quantity}
-金額：$${variant.price * quantity}
+                const variant = product.variants.find(v => v.size === size) ||
+                  product.variants.find(v => v.size.toLowerCase() === size.toLowerCase());
 
-喊單確認後無法更改或取消
-感謝您的購買！
+                if (!variant) {
+                  const availableSizes = product.variants.map(v => v.size).join(", ");
+                  failText += `⚠️ 商品 ${keyword} 找不到尺寸 "${size}" (可用尺寸: ${availableSizes})。\n`;
+                  continue;
+                }
 
-💬輸入關鍵字「總金額」
-即可查看目前喊單品項與總額` }]
-              });
+                try {
+                  const result = await prisma.$executeRaw`
+                    UPDATE "ProductVariant"
+                    SET "sold" = "sold" + ${quantity}
+                    WHERE "id" = ${variant.id}
+                      AND ("stock" IS NULL OR "sold" + ${quantity} <= "stock")
+                  `;
+
+                  if (result === 0) {
+                    failText += `❌ 商品 ${keyword} (${variant.size}) 庫存不足或已完售。\n`;
+                    continue;
+                  }
+                } catch (e) {
+                  console.error("Stock update failed", e);
+                  failText += `❌ 商品 ${keyword} 系統異常無法更新庫存。\n`;
+                  continue;
+                }
+
+                // Create Order
+                await prisma.order.create({
+                  data: {
+                    userId: user.id,
+                    productId: product.id,
+                    quantity: quantity,
+                    size: variant.size,
+                    totalAmount: variant.price * quantity,
+                    status: "CONFIRMED"
+                  }
+                });
+
+                successText += `商品：${product.name}\n尺寸：${variant.size}\n數量：${quantity}\n金額：$${variant.price * quantity}\n\n`;
+              }
+
+              let replyText = "";
+              if (successText) {
+                replyText += `✅ 訂單已確認！\n\n${successText}喊單確認後無法更改或取消\n感謝您的購買！\n\n💬輸入關鍵字「總金額」\n即可查看目前喊單品項與總額\n\n`;
+              }
+              if (failText) {
+                replyText += `【未能入單項目】\n${failText}`;
+              }
+
+              if (replyText) {
+                await client.replyMessage({
+                  replyToken: event.replyToken,
+                  messages: [{ type: "text", text: replyText.trim() }]
+                });
+              }
             }
             return;
           }

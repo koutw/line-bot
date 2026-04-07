@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
           size: v.size,
           price: Number(v.price),
           stock: (v.stock === null || v.stock === undefined || v.stock === "") ? undefined : Number(v.stock),
+          cost: (v.cost === null || v.cost === undefined || v.cost === "") ? undefined : Number(v.cost),
         })),
       };
     }
@@ -133,6 +134,7 @@ export async function PATCH(req: NextRequest) {
             size: v.size,
             price: Number(v.price),
             stock: (v.stock === null || v.stock === undefined || v.stock === "") ? undefined : Number(v.stock),
+            cost: (v.cost === null || v.cost === undefined || v.cost === "") ? undefined : Number(v.cost),
             sold: v.sold ? Number(v.sold) : 0,
           })),
         });
