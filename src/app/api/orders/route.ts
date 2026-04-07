@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
         select: { name: true, lineId: true },
       },
       product: {
-        select: { name: true, keyword: true },
+        select: { name: true, keyword: true, variants: true },
       },
     },
     orderBy: { [sort]: order },

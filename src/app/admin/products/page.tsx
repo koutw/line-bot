@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Minus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Minus, Pencil, Trash2, Copy } from "lucide-react";
 
 import { cn, formatDate } from "@/lib/utils";
 
@@ -111,7 +111,7 @@ export default function ProductsPage() {
     setFormData({
       name: product.name,
       keyword: product.keyword,
-      description: "",
+      description: (product as any).description || "",
       basePrice: "",
       baseStock: "",
     });
@@ -120,6 +120,25 @@ export default function ProductsPage() {
       price: v.price as number | "",
       stock: (v.stock === null || v.stock === undefined) ? "" : v.stock, // Handle null/undefined as ""
       sold: (v as any).sold || 0
+    }));
+    setVariants(mappedVariants.length > 0 ? mappedVariants : [{ size: "F", price: 0, stock: "", sold: 0 }]);
+    setIsOpen(true);
+  };
+
+  const handleDuplicateClick = (product: Product) => {
+    setEditingId(null);
+    setFormData({
+      name: `${product.name} (複製)`,
+      keyword: `${product.keyword}-COPY`,
+      description: (product as any).description || "",
+      basePrice: "",
+      baseStock: "",
+    });
+    const mappedVariants = product.variants.map(v => ({
+      size: v.size,
+      price: v.price as number | "",
+      stock: (v.stock === null || v.stock === undefined) ? "" : v.stock,
+      sold: 0
     }));
     setVariants(mappedVariants.length > 0 ? mappedVariants : [{ size: "F", price: 0, stock: "", sold: 0 }]);
     setIsOpen(true);
@@ -489,7 +508,10 @@ export default function ProductsPage() {
                       <div className="flex justify-end gap-1">
                         {activeTab === "ACTIVE" ? (
                           <>
-                            <Button variant="ghost" size="icon" onClick={() => handleEditClick(product)}>
+                            <Button variant="ghost" size="icon" onClick={() => handleDuplicateClick(product)} title="複製">
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleEditClick(product)} title="編輯">
                               <Pencil className="h-4 w-4" />
                             </Button>
                             <Button variant="ghost" size="icon" onClick={() => handleArchive(product.id)} title="移入歷史">

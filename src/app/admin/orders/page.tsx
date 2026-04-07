@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Download, Trash2, Truck, CheckCircle, PackageCheck, AlertCircle, MoreHorizontal } from "lucide-react";
+import { Download, Trash2, Truck, CheckCircle, PackageCheck, AlertCircle, MoreHorizontal, Pencil } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -46,10 +46,18 @@ import { toast } from "sonner";
 import { cn, formatDate } from "@/lib/utils";
 import { MultiSelect, Option } from "@/components/ui/multi-select";
 
+interface ProductVariant {
+  id?: string;
+  size: string;
+  price: number;
+  stock: number | null;
+  sold: number;
+}
+
 interface Order {
   id: string;
   user: { name: string | null; lineId: string };
-  product: { name: string; keyword: string };
+  product: { name: string; keyword: string; variants?: ProductVariant[] };
   quantity: number;
   size: string | null;
   totalAmount: number;
@@ -81,6 +89,11 @@ export default function OrdersPage() {
   // Delete Modal State
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
+
+  // Edit Order Modal State
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [editFormData, setEditFormData] = useState({ size: "", quantity: 1 });
 
   // Export Modal State
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -258,6 +271,39 @@ export default function OrdersPage() {
       return;
     }
     await updateStatus([id], status);
+  };
+
+  const handleEditClick = (order: Order) => {
+    setEditingOrder(order);
+    setEditFormData({
+      size: order.size || "F",
+      quantity: order.quantity
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOrder) return;
+
+    try {
+      const res = await fetch(`/api/orders/${editingOrder.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editFormData),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("訂單經修改成功");
+        fetchOrders();
+        setIsEditOpen(false);
+      } else {
+        toast.error(data.message || "修改失敗");
+      }
+    } catch (e) {
+      toast.error("發生錯誤");
+    }
   };
 
   const handleSingleDelete = async (id: string) => {
@@ -532,6 +578,14 @@ export default function OrdersPage() {
                         </PopoverTrigger>
                         <PopoverContent className="w-40 p-0" align="end">
                           <div className="grid gap-1 p-1">
+                            <Button
+                              variant="ghost"
+                              className="justify-start h-8 text-xs font-normal"
+                              onClick={() => handleEditClick(order)}
+                            >
+                              <Pencil className="mr-2 h-3 w-3" />
+                              編輯訂單
+                            </Button>
                             {STATUS_OPTIONS.filter(o => o.value !== "PENDING").map((status) => (
                               <Button
                                 key={status.value}
@@ -581,6 +635,69 @@ export default function OrdersPage() {
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>返回</Button>
             <Button variant="destructive" onClick={handleDeleteConfirm}>確認取消</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Order Modal */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>編輯訂單</DialogTitle>
+            <DialogDescription>
+              您可以修改訂單尺寸與數量。請注意系統將自動驗證庫存是否足夠。
+            </DialogDescription>
+          </DialogHeader>
+          {editingOrder && (
+            <form onSubmit={handleEditSubmit} className="space-y-4 py-4">
+              <div className="flex flex-col gap-2">
+                <Label>客戶</Label>
+                <div className="text-sm border p-2 rounded-md bg-secondary/50">
+                  {editingOrder.user.name} ({editingOrder.user.lineId})
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>商品</Label>
+                <div className="text-sm border p-2 rounded-md bg-secondary/50">
+                  [{editingOrder.product.keyword}] {editingOrder.product.name}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label>尺寸</Label>
+                  <Select
+                    value={editFormData.size}
+                    onValueChange={(val) => setEditFormData({ ...editFormData, size: val })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="選擇尺寸" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {editingOrder.product.variants?.map((v) => (
+                        <SelectItem key={v.id || v.size} value={v.size}>
+                          {v.size} (${v.price}) {v.stock !== null ? ` (庫存: ${v.stock - v.sold})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>數量</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={editFormData.quantity}
+                    onChange={(e) => setEditFormData({ ...editFormData, quantity: parseInt(e.target.value) || 1 })}
+                  />
+                </div>
+              </div>
+              
+              <DialogFooter className="mt-6">
+                <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button>
+                <Button type="submit">儲存變更</Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>
