@@ -204,11 +204,11 @@ export async function POST(req: NextRequest) {
           // 數量：2
           // 尺寸：L
 
-          // STRICT CHECK: Must contain Keyword AND Quantity. Size is optional (default F)
-          const hasKeyword = text.includes("商品編號：") || text.includes("商品編號:") || text.includes("代號：") || text.includes("代號:");
-          const hasQuantity = text.includes("數量：") || text.includes("數量:");
+          // CHECK: Strict prefix or likely format
+          const hasStrictPrefix = text.includes("商品編號：") || text.includes("商品編號:") || text.includes("代號：") || text.includes("代號:");
+          const isLikelyOrder = hasStrictPrefix || (text.includes("\n") && /[A-Za-z0-9]/.test(text));
 
-          if (hasKeyword && hasQuantity) {
+          if (isLikelyOrder) {
 
             // 0. Check Global Switch
             const setting = await prisma.systemSetting.findUnique({ where: { key: "ordering_enabled" } });
@@ -216,26 +216,65 @@ export async function POST(req: NextRequest) {
               return;
             }
 
+            const activeProducts = await prisma.product.findMany({
+              where: { status: "ACTIVE" },
+              select: { keyword: true }
+            });
+            const validKeywords = new Set(activeProducts.map(p => p.keyword.toUpperCase()));
+
             const lines = text.split("\n");
             const parsedItems: { keyword: string, quantity: number, size: string }[] = [];
             let currentItem: { keyword: string, quantity: number, size: string } | null = null;
 
-            for (const line of lines) {
+            for (let line of lines) {
+              line = line.trim();
+              if (!line) continue;
+
+              // 1. Strict pattern
               if (line.includes("商品編號：") || line.includes("商品編號:") || line.includes("代號：") || line.includes("代號:")) {
                 if (currentItem && currentItem.keyword) {
                   parsedItems.push(currentItem);
                 }
                 const rawKeyword = line.split(/：|:/)[1]?.trim().toUpperCase() || "";
                 currentItem = {
-                  keyword: rawKeyword.split(/[\s(（]/)[0], // Remove extra text like "(橘色芬達)"
+                  keyword: rawKeyword.split(/[\s(（]/)[0],
                   quantity: 1,
                   size: ""
                 };
+                continue;
               } else if ((line.includes("數量：") || line.includes("數量:")) && currentItem) {
                 const q = line.split(/：|:/)[1].trim();
                 currentItem.quantity = parseInt(q, 10) || 1;
+                continue;
               } else if ((line.includes("尺寸：") || line.includes("尺寸:")) && currentItem) {
                 currentItem.size = line.split(/：|:/)[1].trim();
+                continue;
+              }
+
+              // 2. Free-form pattern
+              const potentialKeyword = line.split(/[\s(（]/)[0].toUpperCase();
+              
+              if (validKeywords.has(potentialKeyword)) {
+                if (currentItem && currentItem.keyword) parsedItems.push(currentItem);
+                currentItem = { keyword: potentialKeyword, quantity: 1, size: "" };
+              } else if (currentItem) {
+                const qMatch = line.match(/^([+＋]\d+)|\d+\s*(件|個|雙|套|組)$/);
+                if (qMatch) {
+                  const qStr = line.replace(/[+＋件個雙套組\s]/g, "");
+                  const q = parseInt(qStr, 10);
+                  if (q > 0) currentItem.quantity = q;
+                } else if (!currentItem.size) {
+                  let s = line;
+                  if (s.endsWith("號") && s.length > 1) {
+                     s = s.replace("號", "").trim();
+                  }
+                  currentItem.size = s;
+                } else {
+                  if (/^\d+$/.test(line)) {
+                     const q = parseInt(line, 10);
+                     if (q > 0) currentItem.quantity = q;
+                  }
+                }
               }
             }
             if (currentItem && currentItem.keyword) {
@@ -269,7 +308,7 @@ export async function POST(req: NextRequest) {
                 });
 
                 if (!product) {
-                  failText += `❓ 找不到商品編號為 ${keyword} 的商品。\n`;
+                  failText += `❌ ${keyword} - 找不到此商品\n`;
                   continue;
                 }
 
@@ -286,7 +325,7 @@ export async function POST(req: NextRequest) {
 
                 if (!variant) {
                   const availableSizes = product.variants.map(v => v.size).join(", ");
-                  failText += `⚠️ 商品 ${keyword} 找不到尺寸 "${size}" (可用尺寸: ${availableSizes})。\n`;
+                  failText += `❌ ${keyword} - ${product.name} 找不到尺寸 "${size}"\n`;
                   continue;
                 }
 
@@ -299,12 +338,12 @@ export async function POST(req: NextRequest) {
                   `;
 
                   if (result === 0) {
-                    failText += `❌ 商品 ${keyword} (${variant.size}) 庫存不足或已完售。\n`;
+                    failText += `❌ ${keyword} - ${product.name} 庫存不足或已完售了😭\n`;
                     continue;
                   }
                 } catch (e) {
                   console.error("Stock update failed", e);
-                  failText += `❌ 商品 ${keyword} 系統異常無法更新庫存。\n`;
+                  failText += `❌ ${keyword} - ${product.name} 系統異常無法更新庫存\n`;
                   continue;
                 }
 
@@ -320,7 +359,7 @@ export async function POST(req: NextRequest) {
                   }
                 });
 
-                successText += `商品：${product.name}\n尺寸：${variant.size}\n數量：${quantity}\n金額：$${variant.price * quantity}\n\n`;
+                successText += `編號：${keyword}\n商品：${product.name}\n尺寸：${variant.size}\n數量：${quantity}\n金額：$${variant.price * quantity}\n\n`;
               }
 
               let replyText = "";
@@ -328,7 +367,7 @@ export async function POST(req: NextRequest) {
                 replyText += `✅ 訂單已確認！\n\n${successText}喊單確認後無法更改或取消\n感謝您的購買！\n\n💬輸入關鍵字「總金額」\n即可查看目前喊單品項與總額\n\n`;
               }
               if (failText) {
-                replyText += `【未能入單項目】\n${failText}`;
+                replyText += `【⚠️未成功入單項目】\n${failText}趕快到群組逛逛其他選品～手刀喊單搶購🔥`;
               }
 
               if (replyText) {
