@@ -56,6 +56,7 @@ interface ProductVariant {
 
 interface Order {
   id: string;
+  productId: string;
   user: { name: string | null; lineId: string };
   product: { name: string; keyword: string; variants?: ProductVariant[] };
   quantity: number;
@@ -70,6 +71,7 @@ interface Product {
   id: string;
   keyword: string;
   name: string;
+  variants?: ProductVariant[];
 }
 
 
@@ -93,7 +95,11 @@ export default function OrdersPage() {
   // Edit Order Modal State
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
-  const [editFormData, setEditFormData] = useState({ size: "", quantity: 1 });
+  const [editFormData, setEditFormData] = useState({ productId: "", size: "", quantity: 1 });
+  const [isProductEditing, setIsProductEditing] = useState(false);
+  const [isConfirmChangeProductOpen, setIsConfirmChangeProductOpen] = useState(false);
+  const [pendingProductId, setPendingProductId] = useState("");
+  const [confirmProductWarning, setConfirmProductWarning] = useState("");
 
   // Export Modal State
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -279,9 +285,11 @@ export default function OrdersPage() {
   const handleEditClick = (order: Order) => {
     setEditingOrder(order);
     setEditFormData({
+      productId: order.productId,
       size: order.size || "F",
       quantity: order.quantity
     });
+    setIsProductEditing(false);
     setIsEditOpen(true);
   };
 
@@ -307,6 +315,52 @@ export default function OrdersPage() {
     } catch (e) {
       toast.error("發生錯誤");
     }
+  };
+
+  const handleProductChangeAttempt = (newProductId: string) => {
+    const targetProduct = products.find(p => p.id === newProductId);
+    const currentSize = editFormData.size;
+    const currentQuantity = editFormData.quantity;
+
+    // Check size compatibility
+    const variant = targetProduct?.variants?.find(
+      v => v.size.toLowerCase() === currentSize.toLowerCase()
+    );
+
+    let warning = "";
+    if (!variant) {
+      warning = `警告：商品「${targetProduct?.name}」無對應的尺寸「${currentSize}」！若確定修改，將會清空尺寸與數量欄位。`;
+    } else {
+      // Check stock compatibility
+      const availableStock = variant.stock !== null ? (variant.stock - variant.sold) : null;
+      if (availableStock !== null && availableStock < currentQuantity) {
+        warning = `警告：商品「${targetProduct?.name}」尺寸「${currentSize}」庫存不足（剩餘 ${availableStock} 件）！若確定修改，將會清空尺寸與數量欄位。`;
+      }
+    }
+
+    setPendingProductId(newProductId);
+    setConfirmProductWarning(warning);
+    setIsConfirmChangeProductOpen(true);
+  };
+
+  const handleConfirmProductChange = () => {
+    if (confirmProductWarning) {
+      setEditFormData({
+        productId: pendingProductId,
+        size: "",
+        quantity: 1
+      });
+    } else {
+      setEditFormData({
+        ...editFormData,
+        productId: pendingProductId
+      });
+    }
+    setIsConfirmChangeProductOpen(false);
+  };
+
+  const handleCancelProductChange = () => {
+    setIsConfirmChangeProductOpen(false);
   };
 
   const handleSingleDelete = async (id: string) => {
@@ -647,60 +701,130 @@ export default function OrdersPage() {
           <DialogHeader>
             <DialogTitle>編輯訂單</DialogTitle>
             <DialogDescription>
-              您可以修改訂單尺寸與數量。請注意系統將自動驗證庫存是否足夠。
+              您可以修改訂單商品、尺寸與數量。請注意系統將自動驗證庫存是否足夠。
             </DialogDescription>
           </DialogHeader>
-          {editingOrder && (
-            <form onSubmit={handleEditSubmit} className="space-y-4 py-4">
-              <div className="flex flex-col gap-2">
-                <Label>客戶</Label>
-                <div className="text-sm border p-2 rounded-md bg-secondary/50">
-                  {editingOrder.user.name} ({editingOrder.user.lineId})
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>商品</Label>
-                <div className="text-sm border p-2 rounded-md bg-secondary/50">
-                  [{editingOrder.product.keyword}] {editingOrder.product.name}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
+          {editingOrder && (() => {
+            const currentSelectedProduct = products.find(p => p.id === editFormData.productId);
+            return (
+              <form onSubmit={handleEditSubmit} className="space-y-4 py-4">
                 <div className="flex flex-col gap-2">
-                  <Label>尺寸</Label>
-                  <Select
-                    value={editFormData.size}
-                    onValueChange={(val) => setEditFormData({ ...editFormData, size: val })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="選擇尺寸" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {editingOrder.product.variants?.map((v) => (
-                        <SelectItem key={v.id || v.size} value={v.size}>
-                          {v.size} (${v.price}) {v.stock !== null ? ` (庫存: ${v.stock - v.sold})` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>客戶</Label>
+                  <div className="text-sm border p-2 rounded-md bg-secondary/50">
+                    {editingOrder.user.name} ({editingOrder.user.lineId})
+                  </div>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label>數量</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={editFormData.quantity}
-                    onChange={(e) => setEditFormData({ ...editFormData, quantity: parseInt(e.target.value) || 1 })}
-                  />
+                  <Label>商品</Label>
+                  <div className="flex gap-2 items-center">
+                    {!isProductEditing ? (
+                      <>
+                        <div className="flex-1 text-sm border p-2 rounded-md bg-secondary/50 truncate">
+                          [{currentSelectedProduct?.keyword || editingOrder.product.keyword}] {currentSelectedProduct?.name || editingOrder.product.name}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 shrink-0 border"
+                          onClick={() => setIsProductEditing(true)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <Select
+                        value={editFormData.productId}
+                        onValueChange={(val) => {
+                          if (val !== editingOrder.productId) {
+                            handleProductChangeAttempt(val);
+                          } else {
+                            setEditFormData({
+                              ...editFormData,
+                              productId: val,
+                              size: editingOrder.size || "F",
+                              quantity: editingOrder.quantity
+                            });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="選擇商品" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[300px]">
+                          {products.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              [{p.keyword}] {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
                 </div>
-              </div>
-              
-              <DialogFooter className="mt-6">
-                <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button>
-                <Button type="submit">儲存變更</Button>
-              </DialogFooter>
-            </form>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <Label>尺寸</Label>
+                    <Select
+                      value={editFormData.size}
+                      onValueChange={(val) => setEditFormData({ ...editFormData, size: val })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="選擇尺寸" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {currentSelectedProduct?.variants?.map((v) => (
+                          <SelectItem key={v.id || v.size} value={v.size}>
+                            {v.size} (${v.price}) {v.stock !== null ? ` (庫存: ${v.stock - v.sold})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>數量</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={editFormData.size ? editFormData.quantity : ""}
+                      disabled={!editFormData.size}
+                      onChange={(e) => setEditFormData({ ...editFormData, quantity: parseInt(e.target.value) || 1 })}
+                    />
+                  </div>
+                </div>
+                
+                <DialogFooter className="mt-6">
+                  <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button>
+                  <Button type="submit" disabled={!editFormData.size}>儲存變更</Button>
+                </DialogFooter>
+              </form>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Change Product Modal */}
+      <Dialog open={isConfirmChangeProductOpen} onOpenChange={setIsConfirmChangeProductOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>確定修改商品編號嗎？</DialogTitle>
+            <DialogDescription>
+              將商品修改為「[{products.find(p => p.id === pendingProductId)?.keyword}] {products.find(p => p.id === pendingProductId)?.name}」。
+            </DialogDescription>
+          </DialogHeader>
+          
+          {confirmProductWarning && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-md flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+              <span>{confirmProductWarning}</span>
+            </div>
           )}
+          
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={handleCancelProductChange}>取消</Button>
+            <Button onClick={handleConfirmProductChange}>確定</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

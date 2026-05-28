@@ -9,7 +9,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    let { size, quantity } = body;
+    let { size, quantity, productId } = body;
     quantity = parseInt(quantity as string, 10);
 
     if (!size || isNaN(quantity) || quantity <= 0) {
@@ -30,22 +30,27 @@ export async function PATCH(req: NextRequest) {
         throw new Error("Cannot edit a cancelled order.");
       }
 
+      const targetProductId = productId || order.productId;
+
       // 2. Fetch new variant
       const newVariant = await tx.productVariant.findUnique({
         where: {
           productId_size: {
-            productId: order.productId,
+            productId: targetProductId,
             size: size,
           },
         },
       });
       if (!newVariant) throw new Error("Selected size not found");
 
-      // Only adjust stock if size OR quantity changed
+      // Adjust stock if product, size, or quantity changed
       const oldSize = order.size || "F";
-      if (oldSize !== size || order.quantity !== quantity) {
+      const isProductChanged = targetProductId !== order.productId;
+      const isSizeChanged = oldSize !== size;
+      const isQuantityChanged = order.quantity !== quantity;
+
+      if (isProductChanged || isSizeChanged || isQuantityChanged) {
         // Step A: Release old variant stock (decrement sold)
-        // We use updateMany here simply because we know the composite key
         await tx.productVariant.updateMany({
           where: { productId: order.productId, size: oldSize },
           data: { sold: { decrement: order.quantity } },
@@ -66,9 +71,14 @@ export async function PATCH(req: NextRequest) {
 
       // 3. Update the Order
       const newTotalAmount = newVariant.price * quantity;
+      const updateData: any = { size, quantity, totalAmount: newTotalAmount };
+      if (isProductChanged) {
+        updateData.productId = targetProductId;
+      }
+
       await tx.order.update({
         where: { id },
-        data: { size, quantity, totalAmount: newTotalAmount },
+        data: updateData,
       });
     });
 
