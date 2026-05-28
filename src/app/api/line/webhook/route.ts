@@ -225,61 +225,127 @@ export async function POST(req: NextRequest) {
             const lines = text.split("\n");
             const parsedItems: { keyword: string, quantity: number, size: string }[] = [];
             let currentItem: { keyword: string, quantity: number, size: string } | null = null;
+            let currentItemLines: string[] = [];
+            let isFreeForm = false;
+
+            const commitCurrentItem = () => {
+              if (currentItem && currentItem.keyword) {
+                if (isFreeForm && currentItemLines.length > 0) {
+                  let size = "";
+                  let quantity = 1;
+                  const remainingLines = [...currentItemLines];
+
+                  // 1. Explicit quantity pattern
+                  for (let i = 0; i < remainingLines.length; i++) {
+                    const line = remainingLines[i];
+                    const qMatch = line.match(/^([+＋]\d+)|\d+\s*(件|個|雙|套|組)$/);
+                    if (qMatch) {
+                      const qStr = line.replace(/[+＋件個雙套組\s]/g, "");
+                      const q = parseInt(qStr, 10);
+                      if (q > 0) {
+                        quantity = q;
+                        remainingLines.splice(i, 1);
+                        break;
+                      }
+                    }
+                  }
+
+                  // 2. Pure integers
+                  if (remainingLines.length > 0) {
+                    const integerIndices: number[] = [];
+                    remainingLines.forEach((line, idx) => {
+                      if (/^\d+$/.test(line)) {
+                        integerIndices.push(idx);
+                      }
+                    });
+
+                    if (integerIndices.length === 1) {
+                      const intIdx = integerIndices[0];
+                      const intVal = parseInt(remainingLines[intIdx], 10);
+
+                      if (remainingLines.length === 1) {
+                        if (intVal <= 10) {
+                          quantity = intVal;
+                        } else {
+                          size = remainingLines[intIdx];
+                        }
+                      } else {
+                        quantity = intVal;
+                        remainingLines.splice(intIdx, 1);
+                      }
+                    } else if (integerIndices.length > 1) {
+                      let qIdx = -1;
+                      let minVal = Infinity;
+                      integerIndices.forEach(idx => {
+                        const val = parseInt(remainingLines[idx], 10);
+                        if (val < minVal) {
+                          minVal = val;
+                          qIdx = idx;
+                        }
+                      });
+
+                      if (qIdx !== -1) {
+                        quantity = minVal;
+                        remainingLines.splice(qIdx, 1);
+                      }
+                    }
+                  }
+
+                  // 3. Remaining as size
+                  if (remainingLines.length > 0) {
+                    let s = remainingLines[0];
+                    if (s.endsWith("號") && s.length > 1) {
+                      s = s.replace("號", "").trim();
+                    }
+                    size = s;
+                  }
+
+                  currentItem.size = size;
+                  currentItem.quantity = quantity;
+                }
+                parsedItems.push(currentItem);
+              }
+              currentItem = null;
+              currentItemLines = [];
+              isFreeForm = false;
+            };
 
             for (let line of lines) {
               line = line.trim();
               if (!line) continue;
 
-              // 1. Strict pattern
+              // 1. Strict pattern keyword
               if (line.includes("商品編號：") || line.includes("商品編號:") || line.includes("代號：") || line.includes("代號:")) {
-                if (currentItem && currentItem.keyword) {
-                  parsedItems.push(currentItem);
-                }
+                commitCurrentItem();
                 const rawKeyword = line.split(/：|:/)[1]?.trim().toUpperCase() || "";
                 currentItem = {
                   keyword: rawKeyword.split(/[\s(（]/)[0],
                   quantity: 1,
                   size: ""
                 };
+                isFreeForm = false;
                 continue;
-              } else if ((line.includes("數量：") || line.includes("數量:")) && currentItem) {
+              } else if (currentItem && (line.includes("數量：") || line.includes("數量:"))) {
                 const q = line.split(/：|:/)[1].trim();
                 currentItem.quantity = parseInt(q, 10) || 1;
                 continue;
-              } else if ((line.includes("尺寸：") || line.includes("尺寸:")) && currentItem) {
+              } else if (currentItem && (line.includes("尺寸：") || line.includes("尺寸:"))) {
                 currentItem.size = line.split(/：|:/)[1].trim();
                 continue;
               }
 
-              // 2. Free-form pattern
+              // 2. Free-form pattern keyword
               const potentialKeyword = line.split(/[\s(（]/)[0].toUpperCase();
-              
+
               if (validKeywords.has(potentialKeyword)) {
-                if (currentItem && currentItem.keyword) parsedItems.push(currentItem);
+                commitCurrentItem();
                 currentItem = { keyword: potentialKeyword, quantity: 1, size: "" };
+                isFreeForm = true;
               } else if (currentItem) {
-                const qMatch = line.match(/^([+＋]\d+)|\d+\s*(件|個|雙|套|組)$/);
-                if (qMatch) {
-                  const qStr = line.replace(/[+＋件個雙套組\s]/g, "");
-                  const q = parseInt(qStr, 10);
-                  if (q > 0) currentItem.quantity = q;
-                } else if (!currentItem.size) {
-                  let s = line;
-                  if (s.endsWith("號") && s.length > 1) {
-                     s = s.replace("號", "").trim();
-                  }
-                  currentItem.size = s;
-                } else {
-                  if (/^\d+$/.test(line)) {
-                     const q = parseInt(line, 10);
-                     if (q > 0) currentItem.quantity = q;
-                  }
-                }
+                currentItemLines.push(line);
               }
             }
-            if (currentItem && currentItem.keyword) {
-              parsedItems.push(currentItem);
-            }
+            commitCurrentItem();
 
             if (parsedItems.length > 0) {
               // Find/Create User ONCE
