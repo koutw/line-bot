@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -43,6 +42,14 @@ export function MultiSelect({
   className,
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState("");
+
+  const filteredOptions = React.useMemo(() => {
+    return options.filter((option) =>
+      option.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      option.value.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [options, searchQuery]);
 
   const handleSelect = (value: string) => {
     if (selected.includes(value)) {
@@ -52,11 +59,22 @@ export function MultiSelect({
     }
   };
 
+  const isAllFilteredSelected = React.useMemo(() => {
+    return filteredOptions.length > 0 && filteredOptions.every((o) => selected.includes(o.value));
+  }, [filteredOptions, selected]);
+
   const handleSelectAll = () => {
-    if (selected.length === options.length) {
-      onChange([]);
+    if (isAllFilteredSelected) {
+      onChange(selected.filter((item) => !filteredOptions.some((o) => o.value === item)));
     } else {
-      onChange(options.map(o => o.value));
+      onChange(Array.from(new Set([...selected, ...filteredOptions.map((o) => o.value)])));
+    }
+  };
+
+  const handleOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen);
+    if (!newOpen) {
+      setSearchQuery("");
     }
   };
 
@@ -65,7 +83,7 @@ export function MultiSelect({
     .filter(Boolean);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -94,49 +112,56 @@ export function MultiSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0" align="start">
-        <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder={searchPlaceholder}
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+          />
           <CommandList>
-            <CommandEmpty>No results found.</CommandEmpty>
-            <CommandGroup>
-              <CommandItem
-                onSelect={handleSelectAll}
-                className="cursor-pointer font-medium"
-              >
-                <div
-                  className={cn(
-                    "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                    selected.length === options.length
-                      ? "bg-primary text-primary-foreground"
-                      : "opacity-50 [&_svg]:invisible"
-                  )}
-                >
-                  <Check className={cn("h-4 w-4")} />
-                </div>
-                <span>Select All</span>
-              </CommandItem>
-              <CommandSeparator />
-              {options.map((option) => (
+            {filteredOptions.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">No results found.</div>
+            ) : (
+              <CommandGroup>
                 <CommandItem
-                  key={option.value}
-                  value={option.label} // Use label for search filtering by default in cmdk
-                  onSelect={() => handleSelect(option.value)}
-                  className="cursor-pointer"
+                  onSelect={handleSelectAll}
+                  className="cursor-pointer font-medium"
                 >
                   <div
                     className={cn(
                       "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                      selected.includes(option.value)
+                      isAllFilteredSelected
                         ? "bg-primary text-primary-foreground"
                         : "opacity-50 [&_svg]:invisible"
                     )}
                   >
                     <Check className={cn("h-4 w-4")} />
                   </div>
-                  <span>{option.label}</span>
+                  <span>Select All</span>
                 </CommandItem>
-              ))}
-            </CommandGroup>
+                <CommandSeparator />
+                {filteredOptions.map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    value={option.label}
+                    onSelect={() => handleSelect(option.value)}
+                    className="cursor-pointer"
+                  >
+                    <div
+                      className={cn(
+                        "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                        selected.includes(option.value)
+                          ? "bg-primary text-primary-foreground"
+                          : "opacity-50 [&_svg]:invisible"
+                      )}
+                    >
+                      <Check className={cn("h-4 w-4")} />
+                    </div>
+                    <span>{option.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
