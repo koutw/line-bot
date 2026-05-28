@@ -61,7 +61,7 @@ model Order {
   product   Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   quantity  Int         @default(1)
   size      String?     // e.g. "M"
-  status    String      @default("CONFIRMED") // CONFIRMED, PURCHASED, OUT_OF_STOCK, CANCELLED
+  status    String      @default("CONFIRMED") // CONFIRMED, SENT_LINK, PAID, PURCHASED, SHIPPED, OUT_OF_STOCK, CANCELLED
   isArchived Boolean    @default(false)
   deleteReason String? // Reason if deleted
   totalAmount Int

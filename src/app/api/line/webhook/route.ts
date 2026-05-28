@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
               where: {
                 userId: user.id,
                 isArchived: false,
-                status: { in: ["CONFIRMED", "PURCHASED"] }
+                status: { in: ["CONFIRMED", "PURCHASED", "SENT_LINK", "PAID", "SHIPPED"] }
               },
               include: { product: true }
             });

@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Download, Trash2, Truck, CheckCircle, PackageCheck, AlertCircle, MoreHorizontal, Pencil } from "lucide-react";
+import { Download, Trash2, Truck, CheckCircle, PackageCheck, AlertCircle, MoreHorizontal, Pencil, Link2, CreditCard } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -103,7 +103,10 @@ export default function OrdersPage() {
 
   const STATUS_OPTIONS = [
     { value: "CONFIRMED", label: "已確認", color: "bg-green-100 text-green-800", icon: CheckCircle },
+    { value: "SENT_LINK", label: "已傳送下單連結", color: "bg-purple-100 text-purple-800", icon: Link2 },
+    { value: "PAID", label: "已付款完成", color: "bg-emerald-100 text-emerald-800", icon: CreditCard },
     { value: "PURCHASED", label: "已採買", color: "bg-blue-100 text-blue-800", icon: PackageCheck },
+    { value: "SHIPPED", label: "已出貨", color: "bg-orange-100 text-orange-800", icon: Truck },
     { value: "OUT_OF_STOCK", label: "斷貨", color: "bg-red-100 text-red-800", icon: AlertCircle },
     { value: "CANCELLED", label: "客人取消", color: "bg-gray-200 text-gray-800", icon: Trash2 },
   ];
