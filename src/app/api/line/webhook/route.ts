@@ -9,6 +9,94 @@ interface LineWebhookBody {
   events: WebhookEvent[];
 }
 
+// LINE API constraints
+const LINE_TEXT_LIMIT = 5000;
+const LINE_MAX_REPLY_MESSAGES = 5;
+
+/**
+ * Splits structured order data (header + item lines + footer) into multiple
+ * LINE messages, each within the 5000 character limit.
+ * Falls back to a simplified summary if more than 5 messages would be needed.
+ */
+function buildSplitMessages(header: string, items: string[], footer: string): string[] {
+  const fullText = `${header}${items.join("\n")}${footer}`;
+  if (fullText.length <= LINE_TEXT_LIMIT) return [fullText];
+
+  const messages: string[] = [];
+  let current = header;
+
+  for (const item of items) {
+    const candidate = current + item + "\n";
+    if (candidate.length > LINE_TEXT_LIMIT - 50) {
+      if (current.trim()) messages.push(current.trimEnd());
+      current = item + "\n";
+    } else {
+      current = candidate;
+    }
+  }
+
+  // Append footer to last chunk if possible
+  if ((current + footer).length <= LINE_TEXT_LIMIT) {
+    messages.push((current + footer).trimEnd());
+  } else {
+    if (current.trim()) messages.push(current.trimEnd());
+    messages.push(footer.trim());
+  }
+
+  // If still too many messages, return a simplified summary
+  if (messages.length > LINE_MAX_REPLY_MESSAGES) {
+    return [`🛍️ 目前共有 ${items.length} 筆訂單\n${footer.trim()}`];
+  }
+  return messages;
+}
+
+/**
+ * Splits arbitrary long text into multiple messages by paragraph (\n\n) boundaries,
+ * then by line (\n) boundaries if a single paragraph is still too long.
+ */
+function splitLongText(text: string): string[] {
+  if (text.length <= LINE_TEXT_LIMIT) return [text];
+
+  const paragraphs = text.split("\n\n");
+  const result: string[] = [];
+  let current = "";
+
+  for (const para of paragraphs) {
+    const sep = current ? "\n\n" : "";
+    if ((current + sep + para).length > LINE_TEXT_LIMIT) {
+      if (current) result.push(current);
+
+      // If a single paragraph exceeds the limit, split by lines
+      if (para.length > LINE_TEXT_LIMIT) {
+        const lines = para.split("\n");
+        current = "";
+        for (const line of lines) {
+          const lineSep = current ? "\n" : "";
+          if ((current + lineSep + line).length > LINE_TEXT_LIMIT) {
+            if (current) result.push(current);
+            current = line.length > LINE_TEXT_LIMIT
+              ? line.substring(0, LINE_TEXT_LIMIT - 3) + "..."
+              : line;
+          } else {
+            current += lineSep + line;
+          }
+        }
+      } else {
+        current = para;
+      }
+    } else {
+      current += sep + para;
+    }
+  }
+  if (current) result.push(current);
+
+  // Limit to LINE max reply messages
+  if (result.length > LINE_MAX_REPLY_MESSAGES) {
+    return result.slice(0, LINE_MAX_REPLY_MESSAGES);
+  }
+  return result;
+}
+
 export async function POST(req: NextRequest) {
   // 1. Get Signature
   const signature = req.headers.get("x-line-signature");
@@ -67,16 +155,18 @@ export async function POST(req: NextRequest) {
             }
 
             let totalAmount = 0;
-            const orderList = orders.map((order, index) => {
+            const orderLines = orders.map((order, index) => {
               totalAmount += order.totalAmount;
               return `${index + 1}. ${order.product.keyword} 🏷️ ${order.product.name} - ${order.size} x ${order.quantity} ($${order.totalAmount})`;
-            }).join("\n");
+            });
 
-            const replyText = `🛍️ 目前訂單明細：\n\n${orderList}\n\n💰 總金額：$${totalAmount}\n\n連線結束後，會再依序傳送下單連結唷！感謝您的購買🫶🏻`;
+            const header = `🛍️ 目前訂單明細：\n\n`;
+            const footer = `\n\n💰 總金額：$${totalAmount}\n\n連線結束後，會再依序傳送下單連結唷！感謝您的購買🫶🏻`;
+            const replyMessages = buildSplitMessages(header, orderLines, footer);
 
             await client.replyMessage({
               replyToken: event.replyToken,
-              messages: [{ type: "text", text: replyText }]
+              messages: replyMessages.map(t => ({ type: "text" as const, text: t }))
             });
             return;
           }
@@ -437,9 +527,11 @@ export async function POST(req: NextRequest) {
               }
 
               if (replyText) {
+                const trimmedReply = replyText.trim();
+                const replyMessages = splitLongText(trimmedReply);
                 await client.replyMessage({
                   replyToken: event.replyToken,
-                  messages: [{ type: "text", text: replyText.trim() }]
+                  messages: replyMessages.map(t => ({ type: "text" as const, text: t }))
                 });
               }
             }
